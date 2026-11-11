@@ -786,6 +786,14 @@ function resolveSubmitDeptId() {
   return state.submitDeptId || '';
 }
 
+/* PC 端请求体里的 id 是数字（el-select 才用 String）；提交体必须还原成数字，
+   否则服务端按「跨部门/他人」分支校验，会把非 7 小时的日志判为不合格。 */
+function numId(v) {
+  if (v === null || v === undefined || v === '') return null;
+  var n = Number(v);
+  return isFinite(n) ? n : v;
+}
+
 function myLogKey() {
   return state.date + '|' + resolveSubmitDeptId();
 }
@@ -1141,8 +1149,8 @@ async function postLog() {
       };
     }),
     date: state.date,
-    userId: myUserId,
-    deptId: myDeptId
+    userId: numId(myUserId),
+    deptId: numId(myDeptId)
   };
 
   var btn = $('submitBtn');
