@@ -405,6 +405,11 @@ function todayStr() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+function nowHHmm() {
+  var d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
 function safeGet(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
 }
@@ -1107,6 +1112,10 @@ function validateForm() {
     if (a === null || b === null) return '时间段格式不正确';
     if (a >= b) return '开始时间必须早于结束时间';
     if (hasOverlap(f.workTimeSlots, s, i)) return '时间段不能交叉重复';
+    /* 服务端规则（已实测）：当天日志的结束时间不能晚于当前时间 */
+    if (state.date === todayStr() && s.endTime > nowHHmm()) {
+      return '结束时间不能晚于当前时间（' + nowHHmm() + '）';
+    }
   }
   return '';
 }
