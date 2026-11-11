@@ -1,0 +1,11 @@
+# 修订前快照，不入库（按需本地保留）
+_backup/
+
+# PC 端参考源：只在本机只读核对接口契约用，不入库，
+# 也不随 Pages 发布（含公司生产包，不适合公开）
+reference/
+
+# 系统与编辑器杂项
+Thumbs.db
+desktop.ini
+.DS_Store

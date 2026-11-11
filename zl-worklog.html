@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e7490">
+<title>工作日志</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='3' width='24' height='26' rx='3' fill='%230e7490'/%3E%3Crect x='8' y='9' width='16' height='2' rx='1' fill='%23fff'/%3E%3Crect x='8' y='14' width='16' height='2' rx='1' fill='%23fff'/%3E%3Crect x='8' y='19' width='10' height='2' rx='1' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:#f1f3f4;color:#182026;font-size:15px;line-height:1.6;
+  -webkit-text-size-adjust:100%;
+}
+.app{min-height:100%;display:flex;flex-direction:column}
+
+/* ---------- 顶栏 ---------- */
+.topbar{
+  position:sticky;top:0;z-index:10;
+  background:#0e7490;color:#fff;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  box-shadow:0 1px 2px rgba(0,0,0,.12);
+}
+.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:8px;min-width:0}
+.brand h1{font-size:17px;font-weight:600;letter-spacing:.5px;white-space:nowrap}
+.brand .who{font-size:13px;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logout{
+  flex:none;min-height:36px;padding:0 12px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.45);background:transparent;color:#fff;
+  font-size:13px;cursor:pointer;
+}
+.logout:active{background:rgba(255,255,255,.16)}
+
+/* ---------- 容器 ---------- */
+main{flex:1;padding:14px 14px calc(20px + env(safe-area-inset-bottom))}
+.card{
+  background:#fff;border-radius:12px;padding:16px;
+  box-shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  margin-bottom:14px;
+}
+.card-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title h2{font-size:15px;font-weight:600;color:#182026}
+.card-title .sub{font-size:13px;color:#78838c}
+
+/* ---------- 表单 ---------- */
+.field{margin-bottom:16px}
+.field:last-child{margin-bottom:0}
+.field > label{display:block;font-size:14px;font-weight:500;color:#3d464d;margin-bottom:8px}
+.input,.select,.textarea{
+  width:100%;min-height:46px;padding:11px 12px;
+  border:1px solid #d5dbe0;border-radius:9px;background:#fff;
+  font-size:16px;color:#182026;font-family:inherit;line-height:1.4;
+  outline:none;transition:border-color .15s,box-shadow .15s;
+  appearance:none;-webkit-appearance:none;
+}
+.input:focus,.select:focus,.textarea:focus{border-color:#0e7490;box-shadow:0 0 0 3px rgba(14,116,144,.12)}
+.textarea{min-height:104px;resize:vertical;line-height:1.55}
+.select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%2378838c' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
+}
+.hint{font-size:13px;color:#78838c;margin-top:6px}
+
+/* ---------- 状态分段 ---------- */
+.seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.seg button{
+  min-height:46px;border-radius:9px;border:1px solid #d5dbe0;background:#fff;
+  font-size:15px;color:#3d464d;font-family:inherit;cursor:pointer;transition:all .15s;
+}
+.seg button[aria-pressed="true"]{border-color:#0e7490;background:#e6f4f6;color:#0a5c70;font-weight:500}
+.seg button:active{transform:scale(.985)}
+
+/* ---------- 时间段 ---------- */
+.slots{display:flex;flex-direction:column;gap:8px}
+.slot{display:flex;align-items:center;gap:8px}
+.slot .input{flex:1;min-width:0;text-align:center;padding-left:8px;padding-right:8px}
+.slot .dash{color:#9aa4ac;font-size:14px;flex:none}
+.icon-btn{
+  flex:none;width:44px;height:44px;border-radius:9px;border:1px solid #e3e7ea;background:#fafbfc;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:#a0372f;
+}
+.icon-btn:active{background:#f4e8e7}
+.icon-btn svg{width:18px;height:18px}
+.add-slot{
+  margin-top:10px;width:100%;min-height:44px;border-radius:9px;
+  border:1px dashed #c3cdd4;background:#fafbfc;color:#0a5c70;font-size:14px;
+  font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.add-slot:active{background:#eef4f6}
+.add-slot svg{width:15px;height:15px}
+
+/* ---------- 工时汇总 ---------- */
+.hours-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 14px;border-radius:10px;background:#eef4f6;border:1px solid #d8e6ea;
+}
+.hours-bar .k{font-size:14px;color:#3d464d}
+.hours-bar .v{font-size:20px;font-weight:600;color:#0a5c70;font-variant-numeric:tabular-nums}
+.hours-bar .v small{font-size:13px;font-weight:400;margin-left:2px}
+
+/* ---------- 提交按钮 ---------- */
+.submit{
+  width:100%;min-height:50px;border:none;border-radius:11px;
+  background:#0e7490;color:#fff;font-size:16px;font-weight:500;font-family:inherit;
+  cursor:pointer;margin-top:4px;transition:background .15s;
+}
+.submit:active{background:#0a5c70}
+.submit:disabled{background:#9fb9c1;cursor:not-allowed}
+
+/* ---------- 标签页 ---------- */
+.tabs{
+  display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;
+  background:#e5eaec;border-radius:10px;margin-bottom:14px;
+}
+.tabs button{
+  min-height:40px;border:none;border-radius:8px;background:transparent;
+  font-size:15px;color:#4a555c;font-family:inherit;cursor:pointer;
+}
+.tabs button[aria-selected="true"]{background:#fff;color:#0a5c70;font-weight:500;box-shadow:0 1px 2px rgba(16,24,40,.1)}
+
+/* ---------- 筛选行 ---------- */
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.filters .field{margin-bottom:0}
+
+/* ---------- 日志列表 ---------- */
+.log-list{display:flex;flex-direction:column;gap:10px}
+.log-item{
+  border:1px solid #e6eaed;border-radius:11px;padding:13px 14px;background:#fcfdfd;
+}
+.log-item.mine{border-color:#bcdfe6;background:#f4fbfc}
+.log-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.nm{font-size:15px;font-weight:600;color:#182026}
+.badge{
+  font-size:12px;padding:2px 7px;border-radius:5px;background:#0e7490;color:#fff;font-weight:400;
+}
+.chip{
+  font-size:13px;padding:2px 8px;border-radius:5px;background:#eef1f3;color:#4a555c;
+}
+.chip.normal{background:#e7f3ee;color:#0f6b4f}
+.chip.leave,.chip.morning_leave,.chip.afternoon_leave{background:#fdf1e3;color:#8a5a13}
+.hours{
+  margin-left:auto;font-size:14px;font-weight:600;color:#0a5c70;
+  font-variant-numeric:tabular-nums;
+}
+.log-content{font-size:14px;color:#3d464d;white-space:pre-wrap;word-break:break-word}
+.log-content.empty{color:#a3adb4;font-style:normal}
+.log-slots{margin-top:8px;font-size:13px;color:#78838c;display:flex;flex-wrap:wrap;gap:6px}
+.log-slots span{padding:2px 7px;border-radius:5px;background:#f0f3f5}
+
+/* ---------- 提示 ---------- */
+.notice{
+  font-size:13px;line-height:1.5;padding:10px 12px;border-radius:9px;margin-bottom:12px;
+}
+.notice.info{background:#eef4f6;color:#0a5c70;border:1px solid #d8e6ea}
+.notice.warn{background:#fdf6e9;color:#8a5a13;border:1px solid #f3e2c4}
+.notice.error{background:#fdeeec;color:#9a2f26;border:1px solid #f6d2cd}
+.empty{
+  text-align:center;padding:34px 12px;color:#9aa4ac;font-size:14px;
+}
+.loading{text-align:center;padding:26px 12px;color:#78838c;font-size:14px}
+
+/* ---------- 确认弹窗 ---------- */
+.modal-mask{
+  position:fixed;inset:0;z-index:30;background:rgba(16,24,40,.45);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.modal-mask[hidden]{display:none}
+.modal{
+  background:#fff;border-radius:12px;padding:20px;width:100%;max-width:360px;
+  box-shadow:0 12px 32px rgba(0,0,0,.22);
+}
+.modal h3{font-size:16px;font-weight:600;color:#182026;margin-bottom:10px}
+.modal p{
+  font-size:14px;line-height:1.6;color:#4a555c;white-space:pre-wrap;
+  margin-bottom:18px;max-height:42vh;overflow:auto;
+}
+.modal-btns{display:flex;gap:10px}
+.modal-btns button{
+  flex:1;min-height:44px;border-radius:9px;font-size:15px;font-family:inherit;cursor:pointer;
+}
+.modal-btns .cancel{border:1px solid #d5dbe0;background:#fff;color:#3d464d}
+.modal-btns .ok{border:none;background:#0e7490;color:#fff}
+.modal-btns .ok.danger{background:#b4413a}
+
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
+  transform:translate(-50%,14px);
+  background:rgba(24,32,38,.94);color:#fff;font-size:14px;
+  padding:11px 18px;border-radius:9px;max-width:82vw;
+  opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:40;
+  text-align:center;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- 超窄屏 ---------- */
+@media (max-width:379px){
+  .filters{grid-template-columns:1fr}
+  .filters .field{margin-bottom:12px}
+}
+
+/* ---------- 平板 / 桌面 ---------- */
+@media (min-width:768px){
+  main{max-width:720px;margin:0 auto;width:100%}
+  .topbar{max-width:none}
+  .topbar-row{max-width:720px;margin:0 auto}
+  .seg{grid-template-columns:repeat(4,1fr)}
+  .filters{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== 顶栏 ===== -->
+  <header class="topbar">
+    <div class="topbar-row">
+      <div class="brand">
+        <h1>工作日志</h1>
+        <span class="who" id="whoText"></span>
+      </div>
+      <button class="logout" id="logoutBtn" type="button">退出登录</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ===== 视图：登录 ===== -->
+    <section id="loginView" hidden>
+      <div class="card">
+        <div class="card-title"><h2>登录</h2><span class="sub">使用公司系统账号</span></div>
+        <div id="loginNotice"></div>
+        <div class="field">
+          <label for="username">账号 / 手机号</label>
+          <input class="input" id="username" type="text" autocomplete="username" placeholder="请输入账号或手机号">
+        </div>
+        <div class="field">
+          <label for="password">密码</label>
+          <input class="input" id="password" type="password" autocomplete="current-password" placeholder="请输入密码">
+        </div>
+        <button class="submit" id="loginBtn" type="button">登录</button>
+        <p class="hint">登录成功后凭证仅保存在本机浏览器，不会上传到其他位置；连续 3 天未使用将自动清除，需重新登录。</p>
+      </div>
+    </section>
+
+    <!-- ===== 视图：主界面 ===== -->
+    <section id="mainView" hidden>
+
+      <div class="card">
+        <div class="filters">
+          <div class="field">
+            <label for="dateInput">日期</label>
+            <input class="input" id="dateInput" type="date">
+          </div>
+          <div class="field">
+            <label for="deptSelect">查看部门</label>
+            <select class="select" id="deptSelect"></select>
+          </div>
+        </div>
+        <p class="hint" id="myDeptHint"></p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tabWriteBtn" aria-selected="true">我的日志</button>
+        <button type="button" role="tab" id="tabReadBtn" aria-selected="false">部门日志</button>
+      </div>
+
+      <div id="noticeArea"></div>
+
+      <!-- ===== 视图：写我的日志 ===== -->
+      <div id="paneWrite">
+        <div class="card">
+          <div class="card-title">
+            <h2>填写 / 修改</h2>
+            <span class="sub" id="writeDateText"></span>
+          </div>
+
+          <div class="field" id="submitDeptField" hidden>
+            <label for="submitDeptSelect">提交部门</label>
+            <select class="select" id="submitDeptSelect"></select>
+            <p class="hint">当前账号未绑定固定部门，请选择本次日志归属的部门。</p>
+          </div>
+
+          <div class="field">
+            <label>工作状态</label>
+            <div class="seg" id="statusSeg">
+              <button type="button" data-status="normal" aria-pressed="true">正常上班</button>
+              <button type="button" data-status="leave" aria-pressed="false">全天请假</button>
+              <button type="button" data-status="morning_leave" aria-pressed="false">上午请假</button>
+              <button type="button" data-status="afternoon_leave" aria-pressed="false">下午请假</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="workContent">工作内容</label>
+            <textarea class="textarea" id="workContent" placeholder="填写当天完成的工作内容"></textarea>
+          </div>
+
+          <div class="field">
+            <label>工作时间段</label>
+            <div class="slots" id="slotList"></div>
+            <button class="add-slot" id="addSlotBtn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#0a5c70" stroke-width="2" fill="none"/></svg>
+              添加时间段
+            </button>
+            <p class="hint">时间需为 5 分钟倍数，且各时间段不可交叉重复。</p>
+          </div>
+
+          <div class="field">
+            <div class="hours-bar">
+              <span class="k">自动计算工时</span>
+              <span class="v" id="hoursValue">0<small>小时</small></span>
+            </div>
+          </div>
+
+          <button class="submit" id="submitBtn" type="button">提交日志</button>
+          <p class="hint" id="submitHint"></p>
+        </div>
+      </div>
+
+      <!-- ===== 视图：看部门日志 ===== -->
+      <div id="paneRead" hidden>
+        <div class="card">
+          <div class="card-title">
+            <h2 id="readTitle">当日日志</h2>
+            <span class="sub" id="readCount"></span>
+          </div>
+          <div id="deptActionBar"></div>
+          <div id="readContent"><div class="loading">加载中…</div></div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<div class="modal-mask" id="modalMask" hidden>
+  <div class="modal">
+    <h3 id="modalTitle"></h3>
+    <p id="modalText"></p>
+    <div class="modal-btns">
+      <button class="cancel" id="modalCancel" type="button">取消</button>
+      <button class="ok" id="modalOk" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================================================
+   工作日志 · 移动端离线页面
+   接口与 PC 端保持一致：https://cms.zhongliukongjian.com:9032/api
+   ========================================================= */
+
+var API_BASE = 'https://cms.zhongliukongjian.com:9032/api';
+var STORE_AUTH = 'lw_h5_auth_v1';
+var STORE_LAST_SEEN = 'lw_h5_last_seen_v1';
+var IDLE_LIMIT_MS = 3 * 24 * 60 * 60 * 1000; // 闲置 3 天未使用即作废，需重新登录
+var CACHE_PREFIX = 'lw_h5_cache_';
+
+var STATUS_LABEL = {
+  normal: '正常上班',
+  leave: '全天请假',
+  morning_leave: '上午请假',
+  afternoon_leave: '下午请假'
+};
+
+var state = {
+  auth: null,          // {token, userId, deptId, realName}
+  depts: [],           // [{id, deptName}]
+  date: '',
+  viewDeptId: '',      // 部门日志过滤用
+  submitDeptId: '',    // 提交日志归属部门（登录未返回 deptId 时由用户选择）
+  myLogLoadedKey: '',  // 已成功读取「我的日志」的 date|dept 组合
+  deptLogKey: '',      // 已加载的部门日志 date|dept 组合
+  tab: 'write',
+  form: {
+    workStatus: 'normal',
+    workContent: '',
+    workTimeSlots: []
+  },
+  myLog: null,
+  deptLogs: [],
+  deptSubmitted: false,   // 当前查看部门当日是否已提交部门日志
+  busy: false,
+  deptBusy: false
+};
+
+/* ---------- 小工具 ---------- */
+function $(id) { return document.getElementById(id); }
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function todayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function safeGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function safeSet(key, val) {
+  try { localStorage.setItem(key, val); } catch (e) { /* 忽略存储失败 */ }
+}
+function safeDel(key) {
+  try { localStorage.removeItem(key); } catch (e) { /* 忽略 */ }
+}
+
+var toastTimer = null;
+function toast(msg) {
+  var el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2600);
+}
+
+/* 提示按来源分槽，避免一处渲染清掉另一处的提示 */
+var notices = {};
+function setNotice(key, type, msg) {
+  notices[key] = { type: type, msg: msg };
+  renderNotices();
+}
+function clearNotice(keys) {
+  if (!keys) {
+    notices = {};
+  } else {
+    (Array.isArray(keys) ? keys : [keys]).forEach(function (k) { delete notices[k]; });
+  }
+  renderNotices();
+}
+function renderNotices() {
+  var keys = Object.keys(notices);
+  if (!keys.length) { $('noticeArea').innerHTML = ''; return; }
+  $('noticeArea').innerHTML = keys.map(function (k) {
+    return '<div class="notice ' + notices[k].type + '">' + esc(notices[k].msg) + '</div>';
+  }).join('');
+}
+/* 登录页专用：notice 区域在未登录时不可见 */
+function loginError(msg) {
+  $('loginNotice').innerHTML = '<div class="notice error">' + esc(msg) + '</div>';
+}
+
+/* ---------- 确认弹窗 ---------- */
+var modalCallback = null;
+function showConfirm(title, text, okLabel, danger, onOk) {
+  modalCallback = onOk;
+  $('modalTitle').textContent = title;
+  $('modalText').textContent = text;
+  var okBtn = $('modalOk');
+  okBtn.textContent = okLabel || '确定';
+  okBtn.className = 'ok' + (danger ? ' danger' : '');
+  $('modalMask').hidden = false;
+}
+function hideConfirm() {
+  $('modalMask').hidden = true;
+  modalCallback = null;
+}
+
+/* ---------- 时间换算 ---------- */
+function toMinutes(hhmm) {
+  if (!hhmm) return null;
+  var parts = String(hhmm).split(':');
+  var h = Number(parts[0]);
+  var m = Number(parts[1]);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function isFiveStep(hhmm) {
+  var m = toMinutes(hhmm);
+  if (m === null) return true;
+  return m % 5 === 0;
+}
+
+function snapFive(hhmm) {
+  var m = toMinutes(hhmm);
+  if (m === null) return hhmm;
+  var snapped = Math.round(m / 5) * 5;
+  return String(Math.floor(snapped / 60)).padStart(2, '0') + ':' + String(snapped % 60).padStart(2, '0');
+}
+
+/* 只取 HH:mm 部分，接口里可能是 "2026-11-11 09:00" */
+function timeOnly(v) {
+  if (!v) return '';
+  var s = String(v);
+  var m = s.match(/(\d{1,2}:\d{2})/);
+  return m ? m[1].padStart(5, '0') : s;
+}
+
+function calcHours(slots) {
+  var total = 0;
+  (slots || []).forEach(function (s) {
+    var a = toMinutes(timeOnly(s.startTime));
+    var b = toMinutes(timeOnly(s.endTime));
+    if (a !== null && b !== null && b > a) total += b - a;
+  });
+  return Math.round(total / 60 * 10) / 10;
+}
+
+function hasOverlap(slots, target, skipIndex) {
+  if (!target.startTime || !target.endTime) return false;
+  var a1 = toMinutes(target.startTime);
+  var b1 = toMinutes(target.endTime);
+  if (a1 === null || b1 === null) return false;
+  for (var i = 0; i < slots.length; i++) {
+    if (i === skipIndex) continue;
+    var s = slots[i];
+    if (!s.startTime || !s.endTime) continue;
+    var a2 = toMinutes(s.startTime);
+    var b2 = toMinutes(s.endTime);
+    if (a2 === null || b2 === null) continue;
+    if (a1 < b2 && b1 > a2) return true;
+  }
+  return false;
+}
+
+/* ---------- 请求封装 ---------- */
+function handleExpired(msg) {
+  state.auth = null;
+  purgeAuth();
+  renderAuthState();
+  if (msg) toast(msg);
+}
+
+async function api(method, path, opts) {
+  opts = opts || {};
+  var url = API_BASE + path;
+  var pairs = [];
+  if (opts.params) {
+    Object.keys(opts.params).forEach(function (k) {
+      var v = opts.params[k];
+      if (v === undefined || v === null || v === '') return;
+      pairs.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    });
+  }
+  if (method === 'get') pairs.push('_t=' + Date.now());
+  if (pairs.length) url += '?' + pairs.join('&');
+
+  var headers = { 'Content-Type': 'application/json;charset=UTF-8' };
+  if (state.auth && state.auth.token) {
+    if (isIdleExpired()) {
+      handleExpired('登录状态已超过 3 天未使用，请重新登录');
+      throw new Error('AUTH_EXPIRED');
+    }
+    headers['Authorization'] = 'Bearer ' + state.auth.token;
+    touchSeen();
+  }
+
+  var resp;
+  try {
+    resp = await fetch(url, {
+      method: method.toUpperCase(),
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      cache: 'no-store'
+    });
+  } catch (e) {
+    throw new Error('网络连接失败，请检查网络后重试');
+  }
+
+  var data = null;
+  try { data = await resp.json(); } catch (e) {
+    throw new Error('接口返回无法解析（HTTP ' + resp.status + '）');
+  }
+
+  if (resp.status === 401 || (data && data.code === -2)) {
+    handleExpired((data && data.msg) || '登录已过期，请重新登录');
+    throw new Error('AUTH_EXPIRED');
+  }
+  if (resp.status === 403 || (data && data.code === -3)) {
+    throw new Error((data && data.msg) || '无权限访问');
+  }
+  return data;
+}
+
+/* ---------- 登录态 ---------- */
+/* 有效期由服务端判定；本地额外加「闲置 3 天」兜底，避免凭证永久驻留 */
+var lastSeenWriteTs = 0;
+var idleExpired = false; // 启动时因闲置超期被清掉的标记，用于登录页提示
+
+function lastSeenAt() {
+  var v = Number(safeGet(STORE_LAST_SEEN));
+  return isFinite(v) && v > 0 ? v : 0;
+}
+
+/* 记录一次「使用」；5 分钟内只写一次，减少存储写入 */
+function touchSeen(force) {
+  var now = Date.now();
+  if (!force && now - lastSeenWriteTs < 5 * 60 * 1000) return;
+  lastSeenWriteTs = now;
+  safeSet(STORE_LAST_SEEN, String(now));
+}
+
+function isIdleExpired() {
+  var t = lastSeenAt();
+  return t > 0 && Date.now() - t > IDLE_LIMIT_MS;
+}
+
+function purgeAuth() {
+  safeDel(STORE_AUTH);
+  safeDel(STORE_LAST_SEEN);
+}
+
+function loadAuth() {
+  var raw = safeGet(STORE_AUTH);
+  if (!raw) return null;
+  var a = null;
+  try { a = JSON.parse(raw); } catch (e) { a = null; }
+  if (!a || !a.token) { purgeAuth(); return null; }
+  if (!lastSeenAt()) {
+    // 旧版本升级：没有使用记录，从此刻起算
+    touchSeen(true);
+    return a;
+  }
+  if (isIdleExpired()) {
+    purgeAuth();
+    idleExpired = true;
+    return null;
+  }
+  touchSeen(true);
+  return a;
+}
+
+function saveAuth(a) {
+  safeSet(STORE_AUTH, JSON.stringify(a));
+  touchSeen(true);
+}
+
+function renderAuthState() {
+  var logged = !!(state.auth && state.auth.token);
+  $('loginView').hidden = logged;
+  $('mainView').hidden = !logged;
+  $('logoutBtn').hidden = !logged;
+  if (logged) {
+    var name = state.auth.realName || ('用户' + (state.auth.userId || ''));
+    $('whoText').textContent = name + (state.auth.deptName ? ' · ' + state.auth.deptName : '');
+  } else {
+    $('whoText').textContent = '';
+  }
+}
+
+/* ---------- 登录 ---------- */
+async function doLogin() {
+  var u = $('username').value.trim();
+  var p = $('password').value;
+  var btn = $('loginBtn');
+
+  if (!u) { loginError('请输入账号或手机号'); return; }
+  if (!p) { loginError('请输入密码'); return; }
+  if (p.length < 6) { loginError('密码长度不能少于 6 位'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '登录中…';
+  $('loginNotice').innerHTML = '';
+
+  try {
+    var r = await api('post', '/value/Login', { body: { username: u, password: p } });
+    if (!r || r.code !== 0 || !r.data || !r.data.token) {
+      $('loginNotice').innerHTML = '<div class="notice error">' + esc((r && r.msg) || '登录失败，请检查账号密码') + '</div>';
+      return;
+    }
+    var d = r.data;
+    state.auth = {
+      token: d.token,
+      userId: d.userId != null ? String(d.userId) : '',
+      deptId: d.deptId != null ? String(d.deptId) : '',
+      realName: d.realName || '',
+      role: d.role || ''
+    };
+    saveAuth(state.auth);
+    state.form = { workStatus: 'normal', workContent: '', workTimeSlots: [] };
+    renderAuthState();
+    $('loginNotice').innerHTML = '';
+    toast('登录成功');
+    await bootstrap();
+  } catch (e) {
+    if (e.message !== 'AUTH_EXPIRED') {
+      $('loginNotice').innerHTML = '<div class="notice error">' + esc(e.message) + '</div>';
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '登录';
+  }
+}
+
+function doLogout() {
+  state.auth = null;
+  purgeAuth();
+  state.myLog = null;
+  state.deptLogs = [];
+  state.depts = [];
+  renderAuthState();
+  $('username').value = '';
+  $('password').value = '';
+  toast('已退出登录');
+}
+
+/* ---------- 部门 ---------- */
+async function loadDepts() {
+  try {
+    var r = await api('get', '/Worklog/GetAccessibleDepartments');
+    if (r && r.code === 0 && Array.isArray(r.data)) {
+      state.depts = r.data.map(function (d) {
+        return { id: String(d.id), deptName: d.deptName || '未知部门' };
+      });
+    }
+  } catch (e) {
+    if (e.message === 'AUTH_EXPIRED') throw e;
+    state.depts = [];
+  }
+  if (state.auth && !state.auth.deptId && !state.submitDeptId && state.depts.length) {
+    state.submitDeptId = state.depts[0].id;
+  }
+  renderDeptSelect();
+}
+
+function deptNameOf(id) {
+  if (!id) return '全部部门';
+  var hit = state.depts.filter(function (d) { return d.id === String(id); })[0];
+  if (hit) return hit.deptName;
+  if (state.auth && state.auth.deptId === String(id) && state.auth.deptName) return state.auth.deptName;
+  return '部门 ' + id;
+}
+
+function renderDeptSelect() {
+  var sel = $('deptSelect');
+  var opts = ['<option value="">全部部门</option>'];
+  state.depts.forEach(function (d) {
+    opts.push('<option value="' + esc(d.id) + '">' + esc(d.deptName) + '</option>');
+  });
+  sel.innerHTML = opts.join('');
+
+  var myDeptId = state.auth && state.auth.deptId ? String(state.auth.deptId) : '';
+  if (state.viewDeptId && state.depts.some(function (d) { return d.id === state.viewDeptId; })) {
+    sel.value = state.viewDeptId;
+  } else if (myDeptId && state.depts.some(function (d) { return d.id === myDeptId; })) {
+    sel.value = myDeptId;
+    state.viewDeptId = myDeptId;
+  } else {
+    sel.value = '';
+    state.viewDeptId = '';
+  }
+
+  var mine = myDeptId ? deptNameOf(myDeptId) : '未绑定（在「我的日志」页选择）';
+  $('myDeptHint').textContent = '我的日志归属部门：' + mine + '。下方「查看部门」只影响浏览，不影响提交。';
+
+  renderSubmitDeptField();
+}
+
+/* ---------- 读取日志 ---------- */
+function cacheKey(date, deptId) {
+  return CACHE_PREFIX + date + '_' + (deptId || 'all');
+}
+
+function readCache(date, deptId) {
+  var raw = safeGet(cacheKey(date, deptId));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+function writeCache(date, deptId, rows) {
+  try { safeSet(cacheKey(date, deptId), JSON.stringify(rows)); } catch (e) { /* 忽略 */ }
+}
+
+async function fetchLogs(date, deptId) {
+  var r = await api('get', '/Worklog/GetWorklogs', {
+    params: { date: date, deptId: deptId, page: 1, pageSize: 1000 }
+  });
+  if (!r || r.code !== 0) throw new Error((r && r.msg) || '读取日志失败');
+  return Array.isArray(r.data) ? r.data : [];
+}
+
+/* 提交日志的归属部门：优先登录绑定部门，否则用用户选择 */
+function resolveSubmitDeptId() {
+  if (state.auth && state.auth.deptId) return String(state.auth.deptId);
+  return state.submitDeptId || '';
+}
+
+function myLogKey() {
+  return state.date + '|' + resolveSubmitDeptId();
+}
+
+async function loadMyLog() {
+  var myDeptId = resolveSubmitDeptId();
+  if (!myDeptId) {
+    state.myLog = null;
+    state.myLogLoadedKey = '';
+    renderWritePane();
+    return;
+  }
+  var rows = await fetchLogs(state.date, myDeptId);
+  writeCache(state.date, 'mine_' + myDeptId, rows);
+  state.myLog = rows.filter(function (r) {
+    return String(r.userId) === String(state.auth.userId);
+  })[0] || null;
+  state.myLogLoadedKey = myLogKey();
+  applyMyLogToForm();
+}
+
+async function loadDeptLogs() {
+  var deptId = state.viewDeptId;
+  try {
+    var rows = await fetchLogs(state.date, deptId);
+    state.deptLogs = rows;
+    writeCache(state.date, deptId, rows);
+    offlineNotice = false;
+  } catch (e) {
+    if (e.message === 'AUTH_EXPIRED') throw e;
+    var cached = readCache(state.date, deptId);
+    if (cached) {
+      state.deptLogs = cached;
+      offlineNotice = true;
+    } else {
+      throw e;
+    }
+  }
+  state.deptSubmitted = !!state.viewDeptId && state.deptLogs.some(function (r) {
+    return Number(r.isDeptSubmit) === 1;
+  });
+  state.deptLogKey = state.date + '|' + (state.viewDeptId || 'all');
+  renderReadPane();
+}
+
+var offlineNotice = false;
+
+function applyMyLogToForm() {
+  var log = state.myLog;
+  if (log) {
+    state.form.workStatus = STATUS_LABEL[log.workStatus] ? log.workStatus : 'normal';
+    state.form.workContent = log.workContent || '';
+    state.form.workTimeSlots = (log.workTimeSlots || []).map(function (s) {
+      return { startTime: timeOnly(s.startTime), endTime: timeOnly(s.endTime) };
+    });
+  } else {
+    state.form.workStatus = 'normal';
+    state.form.workContent = '';
+    state.form.workTimeSlots = defaultSlotsFor('normal');
+  }
+  renderWritePane();
+}
+
+function defaultSlotsFor(status) {
+  if (status === 'leave') return [];
+  if (status === 'morning_leave') return [{ startTime: '13:30', endTime: '17:30' }];
+  if (status === 'afternoon_leave') return [{ startTime: '09:00', endTime: '12:00' }];
+  return [{ startTime: '09:00', endTime: '12:00' }, { startTime: '13:30', endTime: '17:30' }];
+}
+
+/* ---------- 渲染：写 ---------- */
+function renderSubmitDeptField() {
+  var field = $('submitDeptField');
+  var bound = !!(state.auth && state.auth.deptId);
+  field.hidden = bound;
+  if (bound || !state.depts.length) return;
+
+  var sel = $('submitDeptSelect');
+  if (!state.submitDeptId || !state.depts.some(function (d) { return d.id === state.submitDeptId; })) {
+    state.submitDeptId = state.depts[0].id;
+  }
+  sel.innerHTML = state.depts.map(function (d) {
+    return '<option value="' + esc(d.id) + '">' + esc(d.deptName) + '</option>';
+  }).join('');
+  sel.value = state.submitDeptId;
+}
+
+function renderWritePane() {
+  $('writeDateText').textContent = state.date;
+  $('workContent').value = state.form.workContent;
+
+  var segBtns = $('statusSeg').querySelectorAll('button');
+  Array.prototype.forEach.call(segBtns, function (b) {
+    b.setAttribute('aria-pressed', b.getAttribute('data-status') === state.form.workStatus ? 'true' : 'false');
+  });
+
+  renderSubmitDeptField();
+
+  var deptId = resolveSubmitDeptId();
+  var loaded = !!deptId && state.myLogLoadedKey === myLogKey();
+  var sb = $('submitBtn');
+  sb.disabled = !loaded;
+  var hint = $('submitHint');
+  if (loaded) {
+    hint.textContent = '';
+  } else if (!deptId) {
+    hint.textContent = '尚未选择提交部门，选择后才能填写并提交。';
+  } else {
+    hint.textContent = '未能读取本日已有日志，已暂时禁用提交，避免覆盖原记录。请刷新后重试。';
+  }
+
+  renderSlots();
+  renderHours();
+}
+
+function renderSlots() {
+  var wrap = $('slotList');
+  wrap.innerHTML = '';
+  if (!state.form.workTimeSlots.length) {
+    var tip = document.createElement('p');
+    tip.className = 'hint';
+    tip.textContent = '暂无时间段（请假状态下不需要填写）';
+    wrap.appendChild(tip);
+    return;
+  }
+  state.form.workTimeSlots.forEach(function (slot, idx) {
+    var row = document.createElement('div');
+    row.className = 'slot';
+
+    var start = document.createElement('input');
+    start.className = 'input';
+    start.type = 'time';
+    start.step = '300';
+    start.value = slot.startTime || '';
+    start.setAttribute('aria-label', '开始时间');
+    start.addEventListener('change', function () {
+      handleSlotTime(idx, 'startTime', start.value);
+    });
+
+    var dash = document.createElement('span');
+    dash.className = 'dash';
+    dash.textContent = '至';
+
+    var end = document.createElement('input');
+    end.className = 'input';
+    end.type = 'time';
+    end.step = '300';
+    end.value = slot.endTime || '';
+    end.setAttribute('aria-label', '结束时间');
+    end.addEventListener('change', function () {
+      handleSlotTime(idx, 'endTime', end.value);
+    });
+
+    var del = document.createElement('button');
+    del.className = 'icon-btn';
+    del.type = 'button';
+    del.setAttribute('aria-label', '删除该时间段');
+    del.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg>';
+    del.addEventListener('click', function () {
+      state.form.workTimeSlots.splice(idx, 1);
+      renderSlots();
+      renderHours();
+    });
+
+    row.appendChild(start);
+    row.appendChild(dash);
+    row.appendChild(end);
+    row.appendChild(del);
+    wrap.appendChild(row);
+  });
+}
+
+function handleSlotTime(idx, key, value) {
+  var slot = state.form.workTimeSlots[idx];
+  if (!slot) return;
+
+  if (value && !isFiveStep(value)) {
+    toast('时间必须是 5 分钟的倍数');
+    slot[key] = snapFive(value);
+    renderSlots();
+    renderHours();
+    return;
+  }
+
+  slot[key] = value;
+
+  var a = toMinutes(slot.startTime);
+  var b = toMinutes(slot.endTime);
+  if (a !== null && b !== null && a >= b) {
+    toast('开始时间必须早于结束时间');
+    renderHours();
+    return;
+  }
+  if (hasOverlap(state.form.workTimeSlots, slot, idx)) {
+    toast('时间段不能交叉重复');
+    renderHours();
+    return;
+  }
+  renderHours();
+}
+
+function renderHours() {
+  var h = calcHours(state.form.workTimeSlots);
+  $('hoursValue').innerHTML = h + '<small>小时</small>';
+}
+
+/* 状态切换：与 PC 端行为一致 */
+function setStatus(status) {
+  state.form.workStatus = status;
+  if (status === 'leave') {
+    state.form.workTimeSlots = [];
+    state.form.workContent = '请假';
+  } else if (status === 'morning_leave') {
+    state.form.workTimeSlots = state.form.workTimeSlots.filter(function (s) {
+      return (s.endTime || '00:00') > '12:00';
+    });
+    if (!state.form.workTimeSlots.length) {
+      state.form.workTimeSlots = [{ startTime: '13:30', endTime: '17:30' }];
+    }
+    state.form.workContent = '上午请假';
+  } else if (status === 'afternoon_leave') {
+    state.form.workTimeSlots = state.form.workTimeSlots.filter(function (s) {
+      return (s.startTime || '00:00') < '12:00';
+    });
+    if (!state.form.workTimeSlots.length) {
+      state.form.workTimeSlots = [{ startTime: '09:00', endTime: '12:00' }];
+    }
+    state.form.workContent = '下午请假';
+  } else if (status === 'normal') {
+    state.form.workTimeSlots = defaultSlotsFor('normal');
+    if (state.form.workContent === '请假' || state.form.workContent === '上午请假' || state.form.workContent === '下午请假') {
+      state.form.workContent = '';
+    }
+  }
+  renderWritePane();
+}
+
+/* ---------- 渲染：读 ---------- */
+function renderDeptActions() {
+  var box = $('deptActionBar');
+  if (!state.viewDeptId) {
+    box.innerHTML = '<div class="notice info">选择具体部门后，可提交该部门的当日日志。</div>';
+    return;
+  }
+  if (state.deptSubmitted) {
+    box.innerHTML = '<div class="notice info">该部门在 ' + esc(state.date) + ' 的日志已提交。</div>';
+    return;
+  }
+  box.innerHTML =
+    '<button class="submit" id="submitDeptBtn" type="button" style="margin-bottom:8px">提交部门日志</button>' +
+    '<p class="hint" style="margin-bottom:16px">提交的是上方「查看部门」所选的那个部门，不是你的固有部门；提交前请确认该部门所有人都已提交当天日志，工作日会校验全员提交情况。</p>';
+  $('submitDeptBtn').addEventListener('click', askSubmitDeptLog);
+}
+
+function renderReadPane() {
+  renderDeptActions();
+  var box = $('readContent');
+  $('readTitle').textContent = deptNameOf(state.viewDeptId) + ' · ' + state.date;
+  $('readCount').textContent = state.deptLogs.length ? state.deptLogs.length + ' 人' : '';
+
+  if (offlineNotice) {
+    setNotice('offline', 'warn', '当前网络不可用，显示的是本机缓存数据，可能不是最新。');
+  } else {
+    clearNotice('offline');
+  }
+
+  if (!state.deptLogs.length) {
+    box.innerHTML = '<div class="empty">当日暂无日志记录</div>';
+    return;
+  }
+
+  var myId = state.auth ? String(state.auth.userId) : '';
+  var html = ['<div class="log-list">'];
+  state.deptLogs.forEach(function (row) {
+    var mine = myId && String(row.userId) === myId;
+    var status = STATUS_LABEL[row.workStatus] ? row.workStatus : 'normal';
+    var content = (row.workContent || '').trim();
+    var slots = (row.workTimeSlots || []).map(function (s) {
+      var a = timeOnly(s.startTime);
+      var b = timeOnly(s.endTime);
+      if (!a && !b) return '';
+      return '<span>' + esc(a) + ' - ' + esc(b) + '</span>';
+    }).filter(Boolean).join('');
+
+    html.push('<div class="log-item' + (mine ? ' mine' : '') + '">');
+    html.push('<div class="log-head">');
+    html.push('<span class="nm">' + esc(row.realName || ('用户' + (row.userId || ''))) + '</span>');
+    if (mine) html.push('<span class="badge">我</span>');
+    html.push('<span class="chip ' + status + '">' + esc(STATUS_LABEL[status]) + '</span>');
+    html.push('<span class="hours">' + (row.workHours == null ? '—' : esc(row.workHours) + ' 小时') + '</span>');
+    html.push('</div>');
+    html.push('<div class="log-content' + (content ? '' : ' empty') + '">' + (content ? esc(content) : '未填写工作内容') + '</div>');
+    if (slots) html.push('<div class="log-slots">' + slots + '</div>');
+    html.push('</div>');
+  });
+  html.push('</div>');
+  box.innerHTML = html.join('');
+}
+
+/* ---------- 提交 ---------- */
+function validateForm() {
+  var f = state.form;
+  if (!f.workContent.trim()) return '请填写工作内容';
+
+  for (var i = 0; i < f.workTimeSlots.length; i++) {
+    var s = f.workTimeSlots[i];
+    if (!s.startTime || !s.endTime) return '请完善时间段信息';
+    if (!isFiveStep(s.startTime) || !isFiveStep(s.endTime)) return '时间必须是 5 分钟的倍数';
+    var a = toMinutes(s.startTime);
+    var b = toMinutes(s.endTime);
+    if (a === null || b === null) return '时间段格式不正确';
+    if (a >= b) return '开始时间必须早于结束时间';
+    if (hasOverlap(f.workTimeSlots, s, i)) return '时间段不能交叉重复';
+  }
+  return '';
+}
+
+function submitLog() {
+  if (state.busy) return;
+
+  var err = validateForm();
+  if (err) { toast(err); return; }
+
+  if (state.form.workStatus === 'normal' && calcHours(state.form.workTimeSlots) <= 0) {
+    showConfirm(
+      '工时为 0 小时',
+      '当前没有有效的工作时间段，提交后工时为 0 小时，会出现在部门日志统计里。\n确定继续提交吗？',
+      '仍要提交',
+      true,
+      function () { postLog(); }
+    );
+    return;
+  }
+  postLog();
+}
+
+async function postLog() {
+  if (state.busy) return;
+
+  var myDeptId = (state.myLog && state.myLog.deptId) || resolveSubmitDeptId();
+  if (!myDeptId) { toast('请先选择提交部门'); return; }
+
+  var myUserId = (state.myLog && state.myLog.userId) || (state.auth && state.auth.userId) || null;
+
+  var payload = {
+    workHours: calcHours(state.form.workTimeSlots),
+    workContent: state.form.workContent.trim(),
+    workStatus: state.form.workStatus,
+    workTimeSlots: state.form.workTimeSlots.map(function (s) {
+      return {
+        startTime: timeOnly(s.startTime) ? state.date + ' ' + timeOnly(s.startTime) : null,
+        endTime: timeOnly(s.endTime) ? state.date + ' ' + timeOnly(s.endTime) : null
+      };
+    }),
+    date: state.date,
+    userId: myUserId,
+    deptId: myDeptId
+  };
+
+  var btn = $('submitBtn');
+  state.busy = true;
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+
+  try {
+    var r = await api('post', '/Worklog/SaveWorklog', { body: payload });
+    if (r && r.code === 0) {
+      toast('提交成功');
+      await refresh();
+    } else {
+      toast((r && r.msg) || '提交失败');
+    }
+  } catch (e) {
+    if (e.message !== 'AUTH_EXPIRED') toast(e.message);
+  } finally {
+    state.busy = false;
+    btn.textContent = '提交日志';
+    btn.disabled = state.myLogLoadedKey !== myLogKey();
+  }
+}
+
+/* ---------- 提交部门日志 ---------- */
+function askSubmitDeptLog() {
+  var deptId = state.viewDeptId;
+  if (!deptId) { toast('请先选择具体部门'); return; }
+  showConfirm(
+    '提交部门日志',
+    '确定提交【' + deptNameOf(deptId) + '】在【' + state.date + '】的部门日志吗？\n提交后该部门当日日志会计入工作情况统计。',
+    '确定提交',
+    false,
+    function () { submitDeptLog(deptId); }
+  );
+}
+
+async function submitDeptLog(deptId) {
+  if (state.deptBusy) return;
+  var btn = $('submitDeptBtn');
+  state.deptBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+  try {
+    var r = await api('post', '/Worklog/SaveDeptWorklog', { body: { date: state.date, deptId: deptId } });
+    if (r && r.code === 0) {
+      toast(r.msg || '提交部门日志成功');
+      await refresh();
+    } else {
+      toast((r && r.msg) || '提交部门日志失败');
+    }
+  } catch (e) {
+    if (e.message !== 'AUTH_EXPIRED') toast(e.message);
+  } finally {
+    state.deptBusy = false;
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = '提交部门日志'; }
+  }
+}
+
+/* ---------- 刷新 ---------- */
+async function refresh() {
+  clearNotice(['my', 'dept']);
+  try {
+    await loadMyLog();
+  } catch (e) {
+    if (e.message === 'AUTH_EXPIRED') return;
+    var myDeptId = resolveSubmitDeptId();
+    var cached = myDeptId ? readCache(state.date, 'mine_' + myDeptId) : null;
+    if (cached && state.auth) {
+      state.myLog = cached.filter(function (r) {
+        return String(r.userId) === String(state.auth.userId);
+      })[0] || null;
+      state.myLogLoadedKey = myLogKey();
+      applyMyLogToForm();
+      setNotice('my', 'warn', '网络不可用，当前显示本机缓存的「我的日志」，提交前请确认内容。');
+    } else {
+      setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
+    }
+  }
+
+  try {
+    await loadDeptLogs();
+  } catch (e) {
+    if (e.message === 'AUTH_EXPIRED') return;
+    setNotice('dept', 'error', '读取部门日志失败：' + e.message);
+  }
+}
+
+async function bootstrap() {
+  state.date = state.date || todayStr();
+  $('dateInput').value = state.date;
+  await loadDepts();
+  await refresh();
+}
+
+/* ---------- 交互绑定 ---------- */
+$('loginBtn').addEventListener('click', doLogin);
+$('password').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') doLogin();
+});
+$('logoutBtn').addEventListener('click', doLogout);
+
+$('dateInput').addEventListener('change', function () {
+  var v = $('dateInput').value;
+  if (!v) { $('dateInput').value = state.date; return; }
+  state.date = v;
+  refresh();
+});
+
+$('deptSelect').addEventListener('change', function () {
+  state.viewDeptId = $('deptSelect').value;
+  loadDeptLogs().catch(function (e) {
+    if (e.message !== 'AUTH_EXPIRED') setNotice('dept', 'error', '读取部门日志失败：' + e.message);
+  });
+});
+
+$('submitDeptSelect').addEventListener('change', function () {
+  state.submitDeptId = $('submitDeptSelect').value;
+  state.myLogLoadedKey = '';
+  renderWritePane();
+  loadMyLog().catch(function (e) {
+    if (e.message !== 'AUTH_EXPIRED') setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
+  });
+});
+
+$('statusSeg').addEventListener('click', function (e) {
+  var btn = e.target.closest('button[data-status]');
+  if (!btn) return;
+  setStatus(btn.getAttribute('data-status'));
+});
+
+$('workContent').addEventListener('input', function () {
+  state.form.workContent = $('workContent').value;
+});
+
+$('addSlotBtn').addEventListener('click', function () {
+  var slots = state.form.workTimeSlots;
+  var last = slots[slots.length - 1];
+  var next = { startTime: '13:30', endTime: '17:30' };
+  if (last && last.endTime < '12:00') next = { startTime: '13:30', endTime: '17:30' };
+  else if (last && last.endTime < '18:00') next = { startTime: '18:00', endTime: '20:00' };
+
+  if (hasOverlap(slots, next, -1)) {
+    toast('新增时间段与现有时间段冲突，请手动调整');
+  }
+  slots.push(next);
+  renderSlots();
+  renderHours();
+});
+
+$('submitBtn').addEventListener('click', submitLog);
+
+$('modalCancel').addEventListener('click', hideConfirm);
+$('modalOk').addEventListener('click', function () {
+  var cb = modalCallback;
+  hideConfirm();
+  if (cb) cb();
+});
+$('modalMask').addEventListener('click', function (e) {
+  if (e.target === $('modalMask')) hideConfirm();
+});
+
+function switchTab(tab) {
+  state.tab = tab;
+  $('tabWriteBtn').setAttribute('aria-selected', tab === 'write' ? 'true' : 'false');
+  $('tabReadBtn').setAttribute('aria-selected', tab === 'read' ? 'true' : 'false');
+  $('paneWrite').hidden = tab !== 'write';
+  $('paneRead').hidden = tab !== 'read';
+  if (tab === 'read' && !state.auth) return;
+  if (tab === 'read' && state.deptLogKey !== (state.date + '|' + (state.viewDeptId || 'all'))) {
+    loadDeptLogs().catch(function (e) {
+      if (e.message !== 'AUTH_EXPIRED') setNotice('dept', 'error', '读取部门日志失败：' + e.message);
+    });
+  }
+}
+
+$('tabWriteBtn').addEventListener('click', function () { switchTab('write'); });
+$('tabReadBtn').addEventListener('click', function () { switchTab('read'); });
+
+/* ---------- 启动 ---------- */
+(function init() {
+  state.auth = loadAuth();
+  state.date = todayStr();
+  $('dateInput').value = state.date;
+  renderAuthState();
+
+  if (!state.auth && idleExpired) {
+    loginError('登录状态已超过 3 天未使用，为安全起见已清除，请重新登录');
+  }
+
+  if (state.auth) {
+    bootstrap().catch(function (e) {
+      if (e.message !== 'AUTH_EXPIRED') setNotice('general', 'error', e.message);
+    });
+  } else {
+    switchTab('write');
+    renderWritePane();
+  }
+})();
+</script>
+</body>
+</html>
