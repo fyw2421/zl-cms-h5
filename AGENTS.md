@@ -4,7 +4,7 @@
 
 ## 仓库性质
 
-- 产物是**一个** 离线单文件 HTML：`zl-worklog.html`。拷到手机浏览器打开即用，直接调公司 CMS 后端接口。
+- 产物是**一个**自包含单文件 HTML：`zl-worklog.html`。两种运行方式：本地 `file://` 打开（离线界面，数据仍走网络），或经 GitHub Pages 在线访问。注意**不要把它描述成纯离线应用**——读日志、写日志、提交部门日志都真实请求后端。
 - 没有构建、没有依赖、没有测试框架、没有 package.json。不要引入 npm 包、构建工具或 npm 仓库结构。
 - `reference/bundle.js`、`reference/worklog_component.js` 是 PC 端的**只读参考源**，用于核对接口契约，禁止修改、禁止移出 `reference/`。它们**不在版本库里**（`.gitignore` 已忽略 `reference/`），只存在于协作者本机；新环境拿不到时向用户索取，不要凭记忆臆造契约。
 - 根目录只放交付物与文档；参考资料一律进 `reference/`，不要把大文件扔在根目录。
