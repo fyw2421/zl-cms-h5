@@ -1117,7 +1117,9 @@ function submitLog() {
   var err = validateForm();
   if (err) { toast(err); return; }
 
-  if (state.form.workStatus === 'normal' && calcHours(state.form.workTimeSlots) <= 0) {
+  var hours = calcHours(state.form.workTimeSlots);
+
+  if (state.form.workStatus === 'normal' && hours <= 0) {
     showConfirm(
       '工时为 0 小时',
       '当前没有有效的工作时间段，提交后工时为 0 小时，会出现在部门日志统计里。\n确定继续提交吗？',
@@ -1127,6 +1129,24 @@ function submitLog() {
     );
     return;
   }
+
+  /* 服务端规则：状态为「正常上班」时，工作日的工时不得少于 7 小时，
+     不足会返回「正常工作日您选择的时间段小于7小时…」。这里先提示，
+     免得填完才被拒；节假日由服务端判定，所以仍允许继续提交。 */
+  if (state.form.workStatus === 'normal' && hours < 7) {
+    showConfirm(
+      '工时不足 7 小时',
+      '当前状态是「正常上班」，工时为 ' + hours + ' 小时。\n'
+      + '正常工作日提交少于 7 小时，服务端会拒绝（提示「正常工作日您选择的时间段小于7小时」）。\n\n'
+      + '建议：把状态改为「上午请假 / 下午请假 / 全天请假」，或把时间段补足 7 小时。\n'
+      + '若当天是周末或节假日，可以继续提交。',
+      '仍要提交',
+      true,
+      function () { postLog(); }
+    );
+    return;
+  }
+
   postLog();
 }
 
