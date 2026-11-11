@@ -6,7 +6,7 @@
 
 - 产物是**一个** 离线单文件 HTML：`zl-worklog.html`。拷到手机浏览器打开即用，直接调公司 CMS 后端接口。
 - 没有构建、没有依赖、没有测试框架、没有 package.json。不要引入 npm 包、构建工具或 npm 仓库结构。
-- `reference/bundle.js`、`reference/worklog_component.js` 是 PC 端的**只读参考源**，用于核对接口契约，禁止修改、禁止移出 `reference/`。
+- `reference/bundle.js`、`reference/worklog_component.js` 是 PC 端的**只读参考源**，用于核对接口契约，禁止修改、禁止移出 `reference/`。它们**不在版本库里**（`.gitignore` 已忽略 `reference/`），只存在于协作者本机；新环境拿不到时向用户索取，不要凭记忆臆造契约。
 - 根目录只放交付物与文档；参考资料一律进 `reference/`，不要把大文件扔在根目录。
 
 ## 目录
@@ -15,10 +15,14 @@
 zl-worklog.html            # 唯一交付物，内联 CSS/JS
 README.md                  # 功能与接口文档
 AGENTS.md                  # 本文件
-reference/
+.github/workflows/
+  pages.yml                # 发布到 GitHub Pages 的工作流
+scripts/
+  ensure-proxy.ps1         # 联网操作（push/pull）前的代理检查
+reference/                 # 不入库，仅本地
   bundle.js                # PC 端生产包（参考，勿改）
   worklog_component.js     # PC 端组件源码（参考，勿改）
-_backup/                   # 历史快照，非交付产物（按需新建）
+_backup/                   # 历史快照，非交付产物（按需新建，不入库）
 ```
 
 ## 硬性约束
@@ -31,6 +35,7 @@ _backup/                   # 历史快照，非交付产物（按需新建）
 6. **不用 emoji**；图标用内联 SVG。`<meta name="viewport">` 必须含 `width=device-width, initial-scale=1`，禁止 `user-scalable=no`。
 7. **禁止僵尸按钮**：任何看起来可点的元素必须有真实 handler 或明确反馈。
 8. **只交付一个 `.html`**：`present_files` 的 `artifacts[].name` 用文件名本身，不另起标题，不附备份版。
+9. **`reference/` 与 `_backup/` 永不入库**：不要 `git add -f` 强制加回，也不要把大文件塞进提交。历史上曾公开推送过 `bundle.js`，因此这两类文件在仓库里出现即视为违规。
 
 ## 不可破坏的既有行为（回归基线）
 
@@ -99,7 +104,7 @@ C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
 
 ## 分支与发布
 
-> **前置条件**：本仓库当前尚未 `git init`，也没有 `scripts/ensure-proxy.ps1`。本节流程在仓库接入 git 远端并提供该脚本之后才适用；在此之前，交付仍走上一节的 `present_files`。真到要用时，先确认脚本与远端确实存在，不要照抄命令去执行一个不存在的脚本。
+> **前置条件（已满足）**：仓库已 `git init`，远端为 `origin = https://github.com/fyw2421/zl-cms-h5.git`，`scripts/ensure-proxy.ps1` 已入库。联网操作前先确认代理确实可用（见下），再执行 git 命令。
 
 | 分支 | 角色 |
 | --- | --- |
@@ -147,5 +152,8 @@ git push origin develop
 
 **tag 格式**：`vX.Y.Z`，附注 tag。首个是 `v1.0.0`。
 
-发布提交里应包含交付物 `zl-worklog.html` 与本仓库文档；`_backup/` 与 `reference/` 按需决定是否入库（`reference/` 是只读参考源，体积较大，入库前确认远端是否接受）。
+发布提交里只包含交付物 `zl-worklog.html` 与仓库文档/脚本；`_backup/` 与 `reference/` **一律不入库**（已在 `.gitignore`，不要 `-f` 强加）。
+
+推送 `main` 会触发 `.github/workflows/pages.yml` 发布到 GitHub Pages（前提：仓库 Settings → Pages 的 Source 已设为 `GitHub Actions`）。该 workflow 只把 `zl-worklog.html` 复制成 `index.html` 上传，不要把其他文件或目录加进 `_site`。
+
 

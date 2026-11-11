@@ -23,6 +23,17 @@
 
 **前提：后端允许跨域。** 该 API 的 `OPTIONS` 预检实测返回 `204` 且带 `Access-Control-Allow-Origin: *`、`Access-Control-Allow-Headers: authorization,content-type`，因此 `file://` 直接打开也能调通。如果后端后续收紧 CORS，页面会停在「网络连接失败」，需同步调整白名单（放行 `Origin: null`）。
 
+## 在线访问（GitHub Pages）
+
+除了把文件拷到手机，也可以用 GitHub Pages 提供一个网址，方便直接访问。
+
+- 部署方式：**GitHub Actions**（`.github/workflows/pages.yml`），只在 `push main` 或手动触发时运行；
+- 产物：workflow 只把 `zl-worklog.html` 复制成 `_site/index.html` 上传，`reference/`、`scripts/`、文档都不会被发布；
+- 访问地址：`https://fyw2421.github.io/zl-cms-h5/`（根路径即页面，无需带文件名）；
+- 前提：仓库 Settings → Pages → **Source 必须选 `GitHub Actions`**（不是 Deploy from a branch），否则部署步骤会因「Pages 站点未启用」失败。
+
+该站点是公网可访问的，登录凭证仍只存在访问者自己的浏览器里，服务端接口照常校验身份。
+
 ## 接口契约
 
 本页所有请求路径、参数、请求体字段与返回值含义，均与 PC 端一致，**不做二次定义**。
@@ -62,10 +73,14 @@ zl-cms-h5/
 ├─ zl-worklog.html           # 交付物：单文件页面
 ├─ README.md                 # 本文件
 ├─ AGENTS.md                 # 给 AI 代理的约定与验证流程
-├─ reference/                # PC 端只读参考源，勿改
+├─ .github/workflows/
+│  └─ pages.yml              # 发布到 GitHub Pages 的工作流
+├─ scripts/
+│  └─ ensure-proxy.ps1       # 联网操作（push/pull）前的代理检查
+├─ reference/                # PC 端只读参考源，勿改；仅在本地，不入库
 │  ├─ bundle.js              # 生产包：接口路径、axios 配置
 │  └─ worklog_component.js   # 组件源码：字段与表单规则
-└─ _backup/                  # 修订前快照，非交付产物（按需新建）
+└─ _backup/                  # 修订前快照，非交付产物（按需新建，不入库）
 ```
 
 ## 已知限制
@@ -85,4 +100,5 @@ zl-cms-h5/
 ## 安全提示
 
 - 凭证存在 localStorage，`file://` 页面共享同一存储域，本机任意本地 HTML 均可读取。页面已用「3 天闲置自动清除 + 服务端 `-2` 双判定」压缩暴露窗口；如对安全要求更高，可改为 `sessionStorage`（代价是每次打开都要重新登录）；
-- 本页只读取与提交工作日志，不涉及其他 CMS 模块；请勿把带真实 token 的浏览器数据导出分享。
+- 本页只读取与提交工作日志，不涉及其他 CMS 模块；请勿把带真实 token 的浏览器数据导出分享；
+- 走 GitHub Pages 时页面本身公网可访问，但**没有任何人能在未登录的情况下读写数据**——接口鉴权在服务端。真正需要留意的暴露是接口地址公开，以及仓库若为 public，源码同样公开。
