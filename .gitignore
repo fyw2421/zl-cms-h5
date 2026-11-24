@@ -9,3 +9,7 @@ reference/
 Thumbs.db
 desktop.ini
 .DS_Store
+.workbuddy/
+
+# 语法检查临时文件（check.mjs 已改用 os.tmpdir()，此处兜底）
+._syntax_check_*.mjs
