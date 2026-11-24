@@ -274,6 +274,32 @@ body.login-mode main{
 .modal-btns .ok{border:none;background:#0e7490;color:#fff}
 .modal-btns .ok.danger{background:#b4413a}
 
+/* ---------- 部门日志截图预览 ---------- */
+/* 覆盖 .modal 的 max-width:360px：移动端跟随遮罩，桌面 ≥768 放宽到 1130，画布不溢出弹窗 */
+.shot-modal{max-width:360px;display:flex;flex-direction:column;gap:12px}
+@media (min-width:768px){.shot-modal{max-width:1130px}}
+.shot-head{display:flex;align-items:center;gap:10px}
+.shot-head h3{flex:1;text-align:center;margin:0;font-size:16px;font-weight:600;color:#182026}
+/* 左上「预览」：显示当前截图；与右上关闭对称 */
+.shot-preview-head{flex:none;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--brand);background:#fff;color:var(--brand);font-size:14px;font-family:inherit;cursor:pointer;line-height:32px}
+.shot-preview-head:active{background:var(--fill)}
+.shot-close{background:#fff;border:1px solid #d5dbe0;border-radius:8px;width:34px;height:34px;font-size:15px;color:#3d464d;cursor:pointer;line-height:1;flex:none}
+.shot-close:active{background:var(--fill)}
+.shot-preview{overflow:auto;max-height:70vh;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px}
+#shotCanvas{display:block;width:100%;height:auto;background:#fff;cursor:zoom-in}
+/* 截图灯箱：全屏放大查看 */
+.shot-lightbox{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center}
+.shot-lightbox[hidden]{display:none}
+.shot-lightbox img{max-width:96vw;max-height:92vh;object-fit:contain;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.4);touch-action:none;will-change:transform}
+.lightbox-close{position:absolute;top:16px;right:16px;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.22);color:#fff;font-size:18px;line-height:1;cursor:pointer}
+.lightbox-close:active{background:rgba(255,255,255,.4)}
+.shot-btns .cancel{border:1px solid var(--brand);background:#fff;color:var(--brand)}
+.shot-btns .ok{border:none;background:var(--brand);color:#fff}
+/* 已提交分支的「预览截图」按钮：notice 下方、.modal-btns 风格单按钮，与 .submit 区分 */
+.shot-action-row{margin-top:10px;display:flex}
+.shot-preview-btn{flex:1;min-height:44px;border-radius:9px;font-size:15px;font-family:inherit;cursor:pointer;border:1px solid var(--brand);background:#fff;color:var(--brand)}
+.shot-preview-btn:active{background:var(--fill)}
+
 /* ---------- toast ---------- */
 .toast{
   position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
@@ -488,6 +514,30 @@ body.login-mode main{
   </div>
 </div>
 
+<!-- 部门日志截图预览：静态结构，打开时不再 createElement -->
+<div class="modal-mask" id="shotMask" hidden>
+  <div class="modal shot-modal" role="dialog" aria-modal="true" aria-labelledby="shotTitle">
+    <div class="shot-head">
+      <button class="shot-preview-head" id="shotShowBtn" type="button">预览</button>
+      <h3 id="shotTitle">工作日志截图</h3>
+      <button class="shot-close" id="shotClose" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div class="shot-preview">
+      <canvas id="shotCanvas" tabindex="-1"></canvas>
+    </div>
+    <div class="modal-btns shot-btns">
+      <button class="cancel" id="shotCopy" type="button">复制截图</button>
+      <button class="ok" id="shotDownload" type="button">下载截图</button>
+    </div>
+  </div>
+</div>
+
+<!-- 截图灯箱：点图片全屏放大查看，点遮罩或关闭退出 -->
+<div class="shot-lightbox" id="shotLightbox" role="dialog" aria-modal="true" aria-label="工作日志截图放大预览" hidden>
+  <img id="lightboxImg" alt="工作日志截图放大预览">
+  <button class="lightbox-close" id="lightboxClose" type="button" aria-label="关闭放大预览">✕</button>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -620,11 +670,21 @@ function trapModalFocus(e, mask) {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
 document.addEventListener('keydown', function (e) {
-  var mask = !$('tipsMask').hidden ? $('tipsMask') : (!$('modalMask').hidden ? $('modalMask') : null);
+  // 灯箱全屏层优先级最高：它打开时底层 shotMask 仍在，ESC 必须先关灯箱，
+  // 否则会关掉底层弹窗而灯箱残留；灯箱可见时 Tab 不再陷阱到底层弹窗。
+  if (!$('shotLightbox').hidden) {
+    if (e.key === 'Escape') { e.preventDefault(); closeShotLightbox(); }
+    else if (e.key === 'Tab') { trapModalFocus(e, $('shotLightbox')); }
+    return;
+  }
+  var mask = !$('tipsMask').hidden ? $('tipsMask')
+    : (!$('modalMask').hidden ? $('modalMask')
+    : (!$('shotMask').hidden ? $('shotMask') : null));
   if (!mask) return;
   if (e.key === 'Escape') {
     e.preventDefault();
     if (mask === $('tipsMask')) closeModal(mask, $('tipsBtn'));
+    else if (mask === $('shotMask')) closeShotPreview();
     else closeModal(mask, null);
   } else if (e.key === 'Tab') {
     trapModalFocus(e, mask);
@@ -1321,7 +1381,14 @@ function renderDeptActions() {
     return;
   }
   if (state.deptSubmitted) {
-    box.innerHTML = '<div class="notice info">该部门在 ' + esc(state.date) + ' 的日志已提交。</div>';
+    box.innerHTML =
+      '<div class="notice info">该部门在 ' + esc(state.date) + ' 的日志已提交。</div>' +
+      '<div class="shot-action-row"><button class="shot-preview-btn" id="previewShotBtn" type="button">预览截图</button></div>';
+    $('previewShotBtn').addEventListener('click', function () {
+      openShotPreview().catch(function (e) {
+        if (e.message !== 'AUTH_EXPIRED') toast(e.message);
+      });
+    });
     return;
   }
   box.innerHTML =
@@ -1532,6 +1599,8 @@ async function submitDeptLog(deptId) {
     if (r && r.code === 0) {
       toast(r.msg || '提交部门日志成功');
       await refresh();
+      try { await openShotPreview(); }
+      catch (e) { if (e.message !== 'AUTH_EXPIRED') toast('提交成功，但截图预览失败'); }
     } else {
       toast((r && r.msg) || '提交部门日志失败');
     }
@@ -1541,6 +1610,321 @@ async function submitDeptLog(deptId) {
     state.deptBusy = false;
     if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = '提交部门日志'; }
   }
+}
+
+/* ---------- 部门日志截图预览 ---------- */
+var SHOT_W = 1130;
+var SHOT_MAX_H = 8000;   // 异常数据产品阈值（非 canvas 硬上限 32767），超界截断
+/* 规格对齐线上 PC 端 .screenshot-*（真机 getComputedStyle 实测）：
+   表 width:1000px 水平居中、border:1px solid #ddd 全网格（th/td 四边均有边框，含表体行间横线）、
+   表头 bg #f5f5f5/17px 加粗居中、正文 16px、内容 line-height:1.6(25.6)、时段 line-height:1.8(28.8)、
+   vertical-align:middle；列宽 DOM 实测 60/100/80/630/130，合计 1000 */
+var SHOT_TABLE_X = 65;                       // 1000 表在 1130 画布内居中：(1130-1000)/2
+var SHOT_COLS = [60, 100, 80, 630, 130];
+var SHOT_TABLE_W = 1000;
+var SHOT_BORDER = '#ddd';
+var SHOT_HEAD_BG = '#f5f5f5';
+var SHOT_HEAD_FS = 17;
+var SHOT_TITLE_FS = 20;
+var SHOT_LINE_H = 26;      // 内容行高 16×1.6
+var SHOT_PERIOD_H = 29;   // 时段行高 16×1.8
+var SHOT_PERIOD_GAP = 3;
+var SHOT_CELL_PAD = 5;
+var SHOT_FONT = '16px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+
+function shotColX(i) { var x = SHOT_TABLE_X; for (var k = 0; k < i; k++) x += SHOT_COLS[k]; return x; }
+
+/* 按列宽硬切换行：字符累积 + measureText，不靠空格分词；保留原文 \n 分段。
+   用 Array.from 按码点迭代，避免把 emoji 等代理对劈成半个码元 */
+function shotWrap(ctx, text, maxW) {
+  var out = [];
+  String(text == null ? '' : text).split('\n').forEach(function (seg) {
+    var line = '';
+    Array.from(seg).forEach(function (ch) {
+      if (line && ctx.measureText(line + ch).width > maxW) { out.push(line); line = ch; }
+      else { line += ch; }
+    });
+    if (line) out.push(line);
+  });
+  return out.length ? out : [''];
+}
+
+function shotPeriodLine(slot) {
+  var a = timeOnly(slot && slot.startTime);
+  var b = timeOnly(slot && slot.endTime);
+  if (a && b) return a + ' - ' + b;
+  return a || b || '';
+}
+
+/* 测量 → 定高 → 取 ctx → 绘制；全程不再写 width/height，禁止行数截断 */
+function buildShotCanvas() {
+  var canvas = $('shotCanvas');
+  var ctx = canvas.getContext('2d');
+  var rows = state.deptLogs || [];
+
+  // 1) 测量：先算每行行高与总高（此时画布尚未定尺寸）
+  var titleBottom = 66;          // 标题区(基线36) + margin-bottom 20 后的表头顶线
+  var headerH = 40;
+  var bottomPad = 20;
+  var rowHeights = [];
+  var rowTops = [];
+  var totalH = titleBottom + headerH;
+  ctx.font = SHOT_FONT;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var contentLines = shotWrap(ctx, r.workContent || '', SHOT_COLS[3] - 16);
+    var periods = (Array.isArray(r.workTimeSlots) ? r.workTimeSlots : []).map(shotPeriodLine).filter(Boolean);
+    var ch = contentLines.length * SHOT_LINE_H;
+    var ph = periods.length * SHOT_PERIOD_H + Math.max(0, periods.length - 1) * SHOT_PERIOD_GAP;
+    var rh = Math.max(ch, ph, SHOT_LINE_H) + SHOT_CELL_PAD * 2;
+    rowHeights.push(rh);
+    totalH += rh;
+  }
+  totalH += bottomPad;
+  var truncated = false;
+  if (totalH > SHOT_MAX_H) { totalH = SHOT_MAX_H; truncated = true; }
+
+  // 2) 一次性定高，此后不再改 width/height
+  canvas.width = SHOT_W;
+  canvas.height = totalH;
+
+  // 3) 绘制（定高后重设字体与对齐）
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, SHOT_W, totalH);
+
+  var yHeader = titleBottom;                // 表头顶线
+  var rowY = yHeader + headerH;            // 表头底线 / 数据起始
+  var ry = rowY;
+  for (var i = 0; i < rows.length; i++) { rowTops.push(ry); ry += rowHeights[i]; }
+  var tableBottom = ry;
+
+  // 标题（.screenshot-title: 20px/700/center/#000，margin-bottom 20）
+  ctx.font = 'bold ' + SHOT_TITLE_FS + 'px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000';
+  ctx.fillText('[' + deptNameOf(state.viewDeptId) + '][' + state.date + ']工作日志', SHOT_W / 2, 36);
+
+  // 表头铺底 #f5f5f5
+  ctx.fillStyle = SHOT_HEAD_BG;
+  ctx.fillRect(SHOT_TABLE_X, yHeader, SHOT_TABLE_W, headerH);
+
+  // 全网格 #ddd（PC th/td 均 border:1px solid #ddd，含表体行间横线与右框）
+  ctx.strokeStyle = SHOT_BORDER;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(SHOT_TABLE_X, yHeader); ctx.lineTo(SHOT_TABLE_X + SHOT_TABLE_W, yHeader);   // 表头顶线
+  ctx.moveTo(SHOT_TABLE_X, rowY); ctx.lineTo(SHOT_TABLE_X + SHOT_TABLE_W, rowY);         // 表头底线
+  for (var i = 0; i < rowTops.length; i++) {
+    var by = rowTops[i] + rowHeights[i];
+    if (by > SHOT_MAX_H - bottomPad) break;
+    ctx.moveTo(SHOT_TABLE_X, by);
+    ctx.lineTo(SHOT_TABLE_X + SHOT_TABLE_W, by);                                          // 每行底线（行间横线）
+  }
+  ctx.stroke();
+  for (var v = 0; v <= 5; v++) {                                       // 左框 + 4 列分隔 + 右框竖线
+    var vx = v === 5 ? SHOT_TABLE_X + SHOT_TABLE_W : shotColX(v);
+    ctx.beginPath();
+    ctx.moveTo(vx, yHeader);
+    ctx.lineTo(vx, tableBottom);
+    ctx.stroke();
+  }
+
+  // 表头文字 17px 加粗居中
+  ctx.font = 'bold ' + SHOT_HEAD_FS + 'px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#000';
+  var heads = ['序号', '姓名', '工作时长', '工作内容', '工作时间段'];
+  for (var c = 0; c < 5; c++) {
+    ctx.fillText(heads[c], shotColX(c) + SHOT_COLS[c] / 2, yHeader + headerH / 2);
+  }
+
+  // 数据行：单元格垂直居中（vertical-align:middle），内容左对齐、序号/姓名/时长/时段居中
+  ctx.font = SHOT_FONT;
+  ctx.fillStyle = '#000';
+  for (var i = 0; i < rows.length; i++) {
+    var top = rowTops[i], rh = rowHeights[i];
+    if (top + rh > SHOT_MAX_H - bottomPad) { truncated = true; break; }
+    var r = rows[i];
+    var contentLines = shotWrap(ctx, r.workContent || '', SHOT_COLS[3] - 16);
+    var periods = (Array.isArray(r.workTimeSlots) ? r.workTimeSlots : []).map(shotPeriodLine).filter(Boolean);
+    var ch = contentLines.length * SHOT_LINE_H;
+    var ph = periods.length * SHOT_PERIOD_H + Math.max(0, periods.length - 1) * SHOT_PERIOD_GAP;
+    var blockH = Math.max(ch, ph, SHOT_LINE_H);
+    var blockTop = top + (rh - blockH) / 2;
+    var centerY = top + rh / 2;
+
+    ctx.textAlign = 'center';
+    ctx.fillText(String(i + 1), shotColX(0) + SHOT_COLS[0] / 2, centerY);                 // 序号
+    var name = r.realName || (r.userId ? '用户' + r.userId : '用户');
+    ctx.fillText(name, shotColX(1) + SHOT_COLS[1] / 2, centerY);                            // 姓名
+    var h = r.workHours;                                                                    // 时长原样，空留空，不做 <7h 高亮
+    var hText = (h === null || h === undefined || h === '') ? '' : String(h);
+    if (hText) ctx.fillText(hText, shotColX(2) + SHOT_COLS[2] / 2, centerY);
+    ctx.textAlign = 'left';                                                                 // 工作内容左对齐逐行
+    for (var l = 0; l < contentLines.length; l++) {
+      ctx.fillText(contentLines[l], shotColX(3) + 8, blockTop + l * SHOT_LINE_H + SHOT_LINE_H / 2);
+    }
+    ctx.textAlign = 'center';                                                              // 时间段居中逐行
+    for (var p = 0; p < periods.length; p++) {
+      ctx.fillText(periods[p], shotColX(4) + SHOT_COLS[4] / 2, blockTop + p * SHOT_PERIOD_H + SHOT_PERIOD_H / 2);
+    }
+  }
+  if (truncated) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#6b7480';
+    ctx.fillText('…', SHOT_W / 2, Math.min(tableBottom + 16, SHOT_MAX_H - bottomPad));
+    console.warn('部门日志截图内容过长，已在 8000px 处截断');
+    toast('内容过长，截图已截断');
+  }
+  // 新绘制后旧 Blob/ObjectURL 缓存失效，避免转发/复制/下载/灯箱用到上一帧
+  invalidateShotBlob();
+}
+
+/* 门控 → 空数据判定 → 绘制 → openModal；auto/manual 同一入口 */
+var shotPreviewBusy = false;   // 门控请求期间的并发锁，避免重复触发
+var shotPreviewToken = 0;      // 取消令牌：关闭/ESC 自增，使进行中的门控结果作废
+async function openShotPreview() {
+  if (!state.viewDeptId) { toast('请先选择具体部门'); return; }
+  if (shotPreviewBusy) return;
+  var myToken = ++shotPreviewToken;
+  // 快照本次门控所用的日期/部门：等待接口期间用户若切换，结果不得配新 state 绘制
+  var reqDate = state.date, reqDept = state.viewDeptId;
+  shotPreviewBusy = true;
+  var r;
+  try {
+    // C2：deptId 传 String（select 值），不套 numId；C1：AUTH_EXPIRED 原样透传
+    r = await api('get', '/Worklog/ConfirmDeptWorklogSubmit', {
+      params: { date: reqDate, deptId: reqDept }
+    });
+  } catch (e) {
+    if (e.message === 'AUTH_EXPIRED') throw e;
+    if (myToken !== shotPreviewToken) return;   // 已被关闭取消，迟到的错误不再提示
+    // 网络失败/403/接口异常透传原始错误，不再一律误报「请先提交部门日志」
+    toast(e.message || '部门日志预览失败');
+    return;
+  } finally {
+    shotPreviewBusy = false;
+  }
+  if (myToken !== shotPreviewToken) return;      // 门控期间已被关闭取消
+  if (state.date !== reqDate || state.viewDeptId !== reqDept) return;  // 已切换，丢弃旧结果
+  if (!(r && r.code === 0 && r.data)) { toast('请先提交部门日志'); return; }
+  openShotRender();
+}
+
+function openShotRender() {
+  if (!(state.deptLogs || []).length) { toast('当日暂无日志记录'); return; }
+  buildShotCanvas();
+  configureShotCopyBtn();   // 按能力把左钮设为 转发 / 复制截图 / 隐藏，避免与「下载截图」重复
+  openModal($('shotMask'), null);
+}
+
+// 绘制后缓存同一份 PNG Blob，转发/复制/下载/灯箱复用，避免 1130×8000 大图反复编码
+var shotBlobCache = null;
+var shotObjectUrl = null;
+function invalidateShotBlob() {
+  if (shotObjectUrl) { URL.revokeObjectURL(shotObjectUrl); shotObjectUrl = null; }
+  shotBlobCache = null;
+}
+function withShotBlob(canvas, cb) {
+  if (shotBlobCache) { cb(shotBlobCache); return; }
+  canvas.toBlob(function (blob) {
+    if (blob) shotBlobCache = blob;
+    cb(blob);
+  }, 'image/png');
+}
+
+/* 左钮按环境配置：支持文件分享→「转发」(Web Share 拉起微信等)；否则 https 剪贴板→「复制截图」；
+   两者都不支持(http 手机)→隐藏，只留「下载截图」，不再重复一个保存入口 */
+function configureShotCopyBtn() {
+  var btn = $('shotCopy');
+  var canvas = $('shotCanvas');
+  var canCopy = window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.write === 'function'
+    && typeof ClipboardItem !== 'undefined';
+  btn.hidden = false;
+  btn.dataset.mode = 'copy';
+  btn.textContent = '复制截图';
+  withShotBlob(canvas, function (blob) {
+    if (!blob) return;
+    try {
+      var file = new File([blob], shotFileName(), { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        btn.dataset.mode = 'forward';
+        btn.textContent = '转发';
+        return;
+      }
+    } catch (e) { /* 旧浏览器无 File 构造，保持复制/隐藏判定 */ }
+    if (!canCopy) btn.hidden = true;
+  });
+}
+
+/* 左钮统一入口：按 dataset.mode 分发转发 / 复制 */
+function onShotCopyClick() {
+  var canvas = $('shotCanvas');
+  if ($('shotCopy').dataset.mode === 'forward') forwardShot(canvas);
+  else copyShot(canvas);
+}
+
+/* 转发：Web Share 文件分享，拉起系统分享面板（微信/QQ 等由系统列出，点选即发）；不支持则提示走下载。
+   files 分享要求安全上下文(https)，http 内网 canShare 返回 false，此时按钮隐藏、不出现无效入口 */
+function forwardShot(canvas) {
+  withShotBlob(canvas, function (blob) {
+    if (!blob) { toast('截图生成失败'); return; }
+    try {
+      var file = new File([blob], shotFileName(), { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        var dept = deptNameOf(state.viewDeptId);
+        navigator.share({
+          files: [file],
+          title: '工作日志截图',
+          text: '[' + dept + '][' + state.date + ']工作日志'
+        }).catch(function () { /* 用户取消分享，静默 */ });
+        return;
+      }
+    } catch (e) { /* 落到提示 */ }
+    toast('当前浏览器不支持直接转发，请用下载截图');
+  });
+}
+
+function closeShotPreview() {
+  shotPreviewToken++;   // 使正在进行的门控结果作废，关闭后不得再自动开窗
+  closeModal($('shotMask'), null);
+}
+
+/* 导出文件名：日期_部门.png，非法文件名字符替换为 _ */
+function shotFileName() {
+  var dept = deptNameOf(state.viewDeptId).replace(/[\\/:*?"<>|]/g, '_');
+  return '工作日志截图_' + state.date + '_' + dept + '.png';
+}
+
+function downloadShot(canvas) {
+  withShotBlob(canvas, function (blob) {
+    if (!blob) { toast('截图生成失败'); return; }
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = shotFileName();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    toast(isIOS ? '已打开图片，长按保存到相册' : '图片已下载，发微信时在输入框点「+」→相册选择');
+  });
+}
+
+/* 复制：仅安全上下文且 ClipboardItem 可用时写图；失败提示走下载(下载有独立按钮，不再自动保存避免重复) */
+function copyShot(canvas) {
+  withShotBlob(canvas, function (blob) {
+    if (!blob) { toast('截图生成失败'); return; }
+    if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.write === 'function'
+        && typeof ClipboardItem !== 'undefined') {
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        .then(function () { toast('截图已复制到剪贴板'); })
+        .catch(function () { toast('复制失败，请用下载截图'); });
+      return;
+    }
+    toast('当前环境无法复制图片，请用下载截图');
+  });
 }
 
 /* ---------- 刷新 ---------- */
@@ -1694,6 +2078,94 @@ $('modalOk').addEventListener('click', function () {
 $('modalMask').addEventListener('click', function (e) {
   if (e.target === $('modalMask')) hideConfirm();
 });
+
+$('shotClose').addEventListener('click', closeShotPreview);
+// 左上「预览」按钮、点图片本身共用下方灯箱闭包内的 openLb() 全屏放大入口
+// 灯箱：全屏放大查看；手机双指捏合缩放/单指拖拽平移，桌面鼠标滚轮缩放；点遮罩或右上角关闭退出
+(function () {
+  var lb = $('shotLightbox');
+  var img = $('lightboxImg');
+  var canvas = $('shotCanvas');
+  var scale = 1, tx = 0, ty = 0;
+  var pinch = null, pan = null;
+
+  function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
+  function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+  function dist(a, b) { return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
+  function openLb() {
+    if (!lb.hidden) return;
+    reset();
+    // 优先复用绘制缓存的 Blob（objectURL），避免大图再做一次 toDataURL 编码
+    if (shotBlobCache) {
+      if (shotObjectUrl) URL.revokeObjectURL(shotObjectUrl);
+      shotObjectUrl = URL.createObjectURL(shotBlobCache);
+      img.src = shotObjectUrl;
+    } else {
+      img.src = canvas.toDataURL('image/png');
+    }
+    lb.hidden = false;
+    try { $('lightboxClose').focus({ preventScroll: true }); } catch (e) { $('lightboxClose').focus(); }
+  }
+
+  img.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 2) {
+      pinch = { d: dist(e.touches[0], e.touches[1]), s: scale,
+        cx: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        cy: (e.touches[0].clientY + e.touches[1].clientY) / 2, tx: tx, ty: ty };
+      pan = null;
+    } else if (e.touches.length === 1 && scale > 1) {
+      pan = { x: e.touches[0].clientX, y: e.touches[0].clientY, tx: tx, ty: ty };
+    }
+  }, { passive: false });
+
+  img.addEventListener('touchmove', function (e) {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      var nd = dist(e.touches[0], e.touches[1]);
+      scale = Math.min(6, Math.max(1, pinch.s * (nd / pinch.d)));
+      tx = pinch.tx + ((e.touches[0].clientX + e.touches[1].clientX) / 2 - pinch.cx);
+      ty = pinch.ty + ((e.touches[0].clientY + e.touches[1].clientY) / 2 - pinch.cy);
+      apply();
+    } else if (pan && e.touches.length === 1 && scale > 1) {
+      e.preventDefault();
+      tx = pan.tx + (e.touches[0].clientX - pan.x);
+      ty = pan.ty + (e.touches[0].clientY - pan.y);
+      apply();
+    }
+  }, { passive: false });
+
+  function end(e) {
+    if (e.touches.length === 0) { pinch = null; pan = null; }
+    else if (e.touches.length === 1) { pinch = null; }
+  }
+  img.addEventListener('touchend', end);
+  img.addEventListener('touchcancel', end);
+
+  // 桌面鼠标滚轮缩放（1×–6×），回到 1× 时复位平移
+  img.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    scale = Math.min(6, Math.max(1, scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    if (scale === 1) { tx = 0; ty = 0; }
+    apply();
+  }, { passive: false });
+
+  function closeLb() {
+    reset();
+    lb.hidden = true;
+    if (shotObjectUrl) { URL.revokeObjectURL(shotObjectUrl); shotObjectUrl = null; }
+    img.removeAttribute('src');   // 不保留已 revoke 的 blob: URL
+    try { canvas.focus({ preventScroll: true }); } catch (e) {}  // 焦点归还到截图
+  }
+  window.closeShotLightbox = closeLb;   // 供顶层 ESC 处理调用
+  canvas.addEventListener('click', openLb);          // 点图片本身 → 全屏放大
+  $('shotShowBtn').addEventListener('click', openLb); // 左上「预览」按钮 → 全屏放大
+  $('lightboxClose').addEventListener('click', closeLb);
+  lb.addEventListener('click', function (e) {
+    if (e.target === this) closeLb();   // 点遮罩空白处退出
+  });
+})();
+$('shotCopy').addEventListener('click', onShotCopyClick);
+$('shotDownload').addEventListener('click', function () { downloadShot($('shotCanvas')); });
 
 function switchTab(tab) {
   state.tab = tab;
