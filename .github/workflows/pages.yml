@@ -26,6 +26,14 @@ jobs:
 
       # 仓库里只有 zl-worklog.html 一个交付物；这里把它复制成 index.html，
       # 这样 Pages 根路径可直接访问，且不必往仓库里多加一个 html 文件。
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Syntax check
+        run: node scripts/check.mjs
+
       - name: Stage site
         run: |
           mkdir -p _site
