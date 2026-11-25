@@ -12,6 +12,9 @@
   --ink:#182026;--ink-2:#4a555c;--ink-3:#6b7480;--ink-4:#9aa4ac;--ph:#6e6e6e;
   --line:#e8edf0;--warn-bg:#faeeda;--warn:#854f0b;--warn-line:#f0d9a8;
   --danger:#9a2f26;--danger-bg:#fdeeec;--danger-line:#f6d2cd;
+  /* 粘顶偏移：顶栏高度由 JS 实测后覆盖（含 env(safe-area-inset-*) 时要准）；
+     标签页高度不再需要变量（--tabs-h 已无引用，读视图高度由 syncReadLayout 现算） */
+  --topbar-h:44px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -41,17 +44,36 @@ body{
 .logout:active{background:rgba(255,255,255,.16)}
 
 /* ---------- 容器 ---------- */
-main{flex:1;display:flex;flex-direction:column;padding:14px 14px calc(20px + env(safe-area-inset-bottom))}
+main{flex:1;display:flex;flex-direction:column;padding:6px 14px calc(20px + env(safe-area-inset-bottom))}
 /* 登录后主视图保持原块级流布局，不参与 flex 伸缩 */
 #mainView{flex:none}
-/* 筛选卡片只放一行日期/部门，收紧内边距避免控件下方空荡 */
-#mainView > .card:first-child{padding-block:10px}
+/* 日期/部门筛选行已下沉到各视图卡内（顶部只剩标签页） */
+#filtersBar{margin-bottom:10px}
 .card{
   background:#fff;border-radius:12px;padding:16px;
   border:1px solid var(--line);margin-bottom:14px;
 }
 /* 填写卡：上下内边距收紧，争取一屏显示 */
-#mainView #paneWrite .card{padding:12px 16px}
+#mainView #paneWrite .card{padding:10px 16px 12px}
+/* 三块式：筛选卡 / 表单卡 / 状态胶囊 / 操作条，卡片之间 4px（与部门日志同语言） */
+#paneWrite:not([hidden]){display:flex;flex-direction:column;gap:4px}
+#mainView #paneWrite .write-top,#mainView #paneWrite .write-form{margin:0}
+/* 操作条：与部门日志底栏同规格（浅灰底 + 细描边 + 四角 12px + 6/8 内距） */
+#paneWrite #writeActionBar{flex:0 0 auto;background:var(--fill-2);border:1px solid var(--line);
+  border-radius:12px;padding:6px 16px 8px}
+/* 状态胶囊居中在表单卡与操作条之间，与部门日志的 .dept-state 同一枚组件 */
+#paneWrite #writeState{display:flex;justify-content:center;align-items:center}
+#paneWrite #writeState[hidden]{display:none}
+#paneWrite #writeState .dept-state{max-width:100%}
+/* 提交按钮与部门日志底栏按钮同规格（44px / 15px / 10px 圆角），两页底部一致 */
+#paneWrite #submitBtn{min-height:44px;font-size:15px;border-radius:10px}
+/* 筛选卡内：筛选行贴卡底（卡内距兜住），未绑定部门时补一段上间距 */
+#paneWrite #filtersBar{margin-bottom:0}
+/* 筛选行的 .field 不再吃 PaneWrite 表单字段的 13px 下边距，否则卡底会空出 ~25px */
+#mainView #paneWrite .filters .field{margin-bottom:0}
+#paneWrite #submitDeptField{margin:12px 0 0}
+/* 筛选卡上下内距对称（10/10），高度只由 32px 控件决定 */
+#mainView #paneWrite .write-top{padding:10px 16px}
 .card-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .card-title h2{font-size:15px;font-weight:600;color:#182026}
 .card-title .sub{font-size:13px;color:#78838c}
@@ -59,13 +81,18 @@ main{flex:1;display:flex;flex-direction:column;padding:14px 14px calc(20px + env
 /* ---------- 表单 ---------- */
 .field{margin-bottom:16px}
 .field:last-child{margin-bottom:0}
+/* 表单卡内三段间距 13px；工作时间段是最后一段，卡底内距已兜住，不再额外留 22px */
+#mainView #paneWrite .field{margin-bottom:13px}
+#mainView #paneWrite .field-hours{margin-bottom:0}
+/* 按钮已在独立操作条内，不需要额外的顶部间距 */
+#mainView #paneWrite #submitBtn{margin-top:0}
 /* 主界面：填充式输入 */
 #mainView .field:not(.filters .field){margin-bottom:12px}
 #mainView .field>label:not(.picker-wrap){margin-bottom:6px}
 #mainView .input,#mainView .select,#mainView .textarea{background:var(--fill);border-color:transparent;border-radius:10px}
 #mainView .input:focus,#mainView .select:focus,#mainView .textarea:focus{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand)}
 #mainView .input::placeholder,#mainView .textarea::placeholder{color:var(--ph);opacity:1}
-.field > label{display:block;font-size:14px;font-weight:500;color:#3d464d;margin-bottom:8px}
+.field > label{display:block;font-size:15px;font-weight:500;color:var(--ink);margin-bottom:8px}
 .input,.select,.textarea{
   width:100%;min-height:46px;padding:11px 12px;
   border:1px solid #d5dbe0;border-radius:9px;background:#fff;
@@ -75,7 +102,7 @@ main{flex:1;display:flex;flex-direction:column;padding:14px 14px calc(20px + env
 }
 .input:focus,.select:focus,.textarea:focus{border-color:#0e7490;box-shadow:0 0 0 3px rgba(14,116,144,.12)}
 .textarea{min-height:104px;resize:vertical;line-height:1.55}
-#workContent{min-height:160px;padding:12px 14px 52px;resize:none;line-height:1.65}
+#workContent{min-height:152px;padding:12px 14px 52px;resize:none;line-height:1.65}
 .content-wrap{position:relative}
 .expand-btn{position:absolute;right:0;bottom:6px;z-index:2;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:#fff;border:0;border-radius:50%;color:var(--brand);cursor:pointer;box-shadow:0 1px 5px rgba(16,36,48,.14)}
 .expand-btn svg{width:15px;height:15px}
@@ -84,11 +111,54 @@ main{flex:1;display:flex;flex-direction:column;padding:14px 14px calc(20px + env
   background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
 }
 .hint{font-size:13px;color:var(--ink-2);margin-top:6px}
+/* 提交提示为空时不占位，省 6px；有文案时正常显示 */
+/* 阻断型提示（未选部门 / 未读到当天记录）与部门日志的警示文案同一色号与字号；
+   纯说明性的 .hint（如"暂无时间段"）保持灰色，不与警告混色 */
+#submitHint{color:#cf1d1d;font-size:12px}
+#submitHint:empty{display:none}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 16px}
+/* 只读卡头部：粘性/负外边距等旧手法已由 #paneRead 下的新规则覆盖，这里只留基础尺寸 */
+.read-head{background:#fff}
+/* 上条 padding-bottom 兜住间距，这里清零，避免 .stats 的下外边距塌陷出去 */
+.read-head .stats{margin-bottom:0}
+/* 部门日志 = 两张卡：筛选/统计卡 + 列表卡。
+   高度自适应内容，但以 --read-h 为上限：人少时卡贴合内容，人多时到顶后仍在卡内滚动 */
+#paneRead:not([hidden]){display:flex;flex-direction:column;gap:4px;
+  height:auto;max-height:var(--read-h,none)}
+#paneRead .read-top{margin:0;padding:12px 16px}
+/* 卡内滚动后不再需要粘性，也去掉贴卡片边缘的负外边距 */
+#paneRead .read-head{position:static;margin:0;padding:0;background:transparent}
+#paneRead .read-list-card{flex:1 1 auto;min-height:0;margin:0;padding:0;overflow:hidden;
+  display:flex;flex-direction:column}
+#paneRead #readContent{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:6px 16px}
+/* 底栏独立成块（卡片在自己上方收尾）：四角圆角、浅灰底、细描边，
+   与上方列表卡靠 #paneRead 的 4px gap 分开；内距收紧（6/8），把高度让给列表 */
+#paneRead #deptActionBar{position:static;z-index:auto;flex:0 0 auto;margin:0;
+  background:var(--fill-2);border:1px solid var(--line);border-radius:12px;
+  box-shadow:none;
+  padding:6px 16px 8px}
+/* 列表卡已自带底栏，页面底部不必再留 20px 空白（切 tab 时由 switchTab 打标） */
+body.read-mode main{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+#deptActionBar{background:#fff}
+#deptActionBar .bar{display:flex;flex-direction:column;align-items:stretch}
+/* 状态标签：位于列表卡与操作条之间的缝隙里，淡青胶囊承托，居中 */
+#paneRead #deptState{display:flex;justify-content:center;align-items:center}
+#paneRead #deptState[hidden]{display:none}
+.dept-state{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:0;
+  font-size:12px;line-height:1.3;color:#cf1d1d;
+  background:var(--fill);border:1px solid #d9ebef;border-radius:11px;padding:2px 10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dept-state::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+/* 全员已填写：中性色正向确认，不再用警示红 */
+.dept-state.ok{color:#0a5c70;border-color:#cfe6eb}
+/* 底栏按钮恢复通栏 44px（拇指热区最大），与上方状态行竖排
+   两个按钮不会同时出现，填充/描边/字号完全一致，避免看起来像不同权限的入口 */
+#deptActionBar .submit{width:100%;min-height:44px;margin:0;
+  padding:0 16px;border-radius:10px;font-size:15px}
 .stat{background:var(--fill);border-radius:10px;padding:10px 4px;text-align:center}
 .stat .k{font-size:11px;color:var(--ink-2);display:block}
 .stat .v{font-size:18px;font-weight:600;color:var(--brand);font-variant-numeric:tabular-nums}
-.dept-tip{font-size:12px;color:var(--ink-2);margin:8px 0 10px}
 .input::placeholder,.textarea::placeholder{color:#9aa4ac;opacity:1}
 
 /* ---------- 登录页（设计稿 v5：无顶栏 · 青色徽标 · 填充式输入） ---------- */
@@ -146,43 +216,37 @@ body.login-mode main{
 .seg button[aria-pressed="true"]{border-color:#0e7490;background:#e6f4f6;color:#0a5c70;font-weight:500}
 .seg button:active{transform:scale(.985)}
 #statusSeg{grid-template-columns:repeat(4,1fr);gap:6px}
-#statusSeg button{min-height:34px;padding:0 2px;border-radius:9px;font-size:13px;line-height:1.3;white-space:nowrap}
-#statusSeg button[data-status="normal"]{background:var(--fill);border-color:transparent;color:var(--brand-dark)}
-#statusSeg button.leave-chip[aria-pressed="false"]{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
-#statusSeg button[aria-pressed="true"]{border-color:var(--brand);background:var(--brand);color:#fff;font-weight:600}
-#statusSeg button.leave-chip[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
+#statusSeg button{min-height:34px;padding:0 2px;border-radius:9px;font-size:13px;color:var(--ink-2);line-height:1.3;white-space:nowrap;
+  background:var(--fill);border-color:transparent}
+#statusSeg button[aria-pressed="true"]{border-color:var(--brand);background:var(--brand);color:#fff;font-weight:500}
 
 /* ---------- 时间段 ---------- */
-.slots{display:flex;flex-direction:column;gap:6px}
-.slot{display:flex;align-items:center;gap:8px}
-.slot .input{flex:1;min-width:0;text-align:center;padding:6px 8px;min-height:36px;background:var(--fill);border-color:transparent}
+.slots{display:flex;flex-direction:column;gap:4px}
+.slot{display:flex;align-items:center;gap:6px}
+#mainView .slot .input{flex:1;min-width:0;text-align:center;padding:4px 8px;min-height:32px;border-radius:8px;background:var(--fill);border-color:transparent;font-size:16px;font-variant-numeric:tabular-nums}
 .slot .input:focus{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand)}
-.slot .dash{color:#9aa4ac;font-size:14px;flex:none}
+.slot .dash{color:#9aa4ac;font-size:13px;flex:none}
 .icon-btn{
-  flex:none;width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:#fff;
+  flex:none;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:#fff;
   display:flex;align-items:center;justify-content:center;cursor:pointer;color:#a0372f;
 }
 .icon-btn:active{background:#f4e8e7}
-.icon-btn svg{width:18px;height:18px}
+.icon-btn svg{width:16px;height:16px}
 /* 标题行：标签左、添加按钮右，省掉按钮独占的一行 */
-.field-head{display:flex;align-items:center;gap:8px;margin:0 0 8px}
-.field-head .field-label{margin-bottom:0}
+.field-head{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}
+/* 字段标题统一 15px/500（工作时间段是 span，必须显式写，否则继承 body 的 15px/400） */
+.field-head .field-label{margin-bottom:0;font-size:15px;font-weight:500;color:var(--ink)}
 .add-slot{
-  flex:none;min-height:30px;padding:0 11px;border-radius:8px;
+  flex:none;margin-left:auto;align-self:center;min-height:32px;padding:0 11px;border-radius:8px;
   border:1px solid var(--brand);background:var(--brand);color:#fff;font-size:13px;font-weight:500;
   font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;
 }
 .add-slot:active{background:var(--brand-dark);border-color:var(--brand-dark)}
 .add-slot svg{width:14px;height:14px}
 
-/* ---------- 工时汇总 ---------- */
-.hours-bar{
-  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  padding:10px 16px;border-radius:10px;background:var(--fill);border:1px solid transparent;
-}
-.hours-bar .k{font-size:13px;color:var(--ink-2)}
-.hours-bar .v{font-size:22px;font-weight:600;color:var(--brand-dark);font-variant-numeric:tabular-nums}
-.hours-bar .v small{font-size:13px;font-weight:400;margin-left:3px;color:var(--ink-2)}
+/* ---------- 工时读数（紧跟“工作时间段”后，呈 X小时 形式） ---------- */
+.hours-inline{display:inline-flex;align-items:baseline;font-size:13px;color:var(--ink-2);white-space:nowrap;flex:none;margin-left:-6px}
+.hours-inline .v{font-size:19px;font-weight:600;color:var(--brand-dark);font-variant-numeric:tabular-nums;line-height:1;margin:0 2px 0 1px}
 
 /* ---------- 提交按钮 ---------- */
 .submit{
@@ -194,8 +258,12 @@ body.login-mode main{
 .submit:disabled{background:#9fb9c1;cursor:not-allowed}
 
 /* ---------- 标签页 ---------- */
-.tabs{display:flex;gap:26px;border-bottom:1px solid var(--line);margin-bottom:14px}
-.tabs button{position:relative;min-height:40px;border:none;background:transparent;padding:10px 0;font-size:15px;color:var(--ink-2);font-family:inherit;cursor:pointer;border-radius:0}
+/* 标签页一起粘顶：负上外边距 + 等值上内边距，用底色补住 main 的 6px 顶部留白，滚动时不留缝 */
+.tabs{display:flex;gap:26px;border-bottom:1px solid var(--line);margin-bottom:9px;
+  position:sticky;top:var(--topbar-h);z-index:9;background:#f1f3f4;
+  margin-top:-6px;padding-top:6px}
+/* 上内边距比下小 4px：让标签文字上沿与上方日期值的视觉间距和控件边缘间距一致 */
+.tabs button{position:relative;min-height:40px;border:none;background:transparent;padding:6px 0 10px;font-size:16px;color:#6f7a80;font-family:inherit;cursor:pointer;border-radius:0}
 .tabs button[aria-selected="true"]{background:transparent;color:var(--brand);font-weight:600;box-shadow:none}
 .tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--brand);border-radius:2px}
 
@@ -205,39 +273,45 @@ body.login-mode main{
 #mainView .filters .field{margin-bottom:0}
 .filters .field>label:not(.picker-wrap){display:none}
 /* 特异性需高于 .field > label，否则 display:block/margin-bottom 会覆盖 flex 居中 */
-.filters .field > label.picker-wrap{position:relative;display:flex;align-items:center;margin-bottom:0;min-height:40px;padding:0 44px 0 14px;background:var(--fill);border-radius:10px;cursor:pointer}
-.picker-val{font-size:16px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.picker-arrow{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--brand)}
+.filters .field > label.picker-wrap{position:relative;display:flex;align-items:center;margin-bottom:0;min-height:32px;padding:0 34px 0 11px;background:var(--fill);border-radius:8px;cursor:pointer}
+.picker-val{font-size:13px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.picker-arrow{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:7px;background:transparent;display:flex;align-items:center;justify-content:center;color:var(--brand)}
 .picker-arrow svg{width:14px;height:14px}
 .picker-native{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;font-size:16px}
+/* 桌面端 date 只在右端内建日历图标处弹面板，把这枚 indicator 撑满整框，
+   使“点胶囊任意位置即弹面板”，与手机上“点哪都能选”的行为对齐 */
+.picker-native::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 
 /* ---------- 日志列表 ---------- */
-.log-list{display:flex;flex-direction:column;gap:10px}
-.log-item{border-left:3px solid var(--brand);padding:10px 12px;margin-bottom:16px;border-bottom:1px solid var(--line);border-radius:0 10px 10px 0}
+/* 紧凑版：条目间距交给 gap（原为 gap10 + margin16 = 26），不再叠双份外距
+   时段块并入头部行（放工时前面），宽度不够时 flex-wrap 自动折行，不挤压也不溢出 */
+.log-list{display:flex;flex-direction:column;gap:8px}
+.log-item{border-left:3px solid var(--brand);padding:6px 12px 8px;margin-bottom:0;border-bottom:1px solid var(--line);border-radius:0 10px 10px 0}
 .log-item.mine{border-left-color:var(--brand)}
 .log-item.leave{border-left-color:var(--warn)}
 .log-item.pending{border-left-color:var(--danger);background:var(--danger-bg);border-radius:0 10px 10px 0}
-.log-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.nm{font-size:15px;font-weight:600;color:#182026}
+.log-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.nm{font-size:14px;font-weight:600;color:#182026}
 .badge{
-  font-size:12px;padding:2px 7px;border-radius:5px;background:#0e7490;color:#fff;font-weight:400;
+  font-size:11px;padding:2px 6px;border-radius:5px;background:#0e7490;color:#fff;font-weight:400;
 }
 .chip{
-  font-size:13px;padding:2px 8px;border-radius:5px;background:#eef1f3;color:#4a555c;
+  font-size:12px;padding:1px 7px;border-radius:5px;background:#eef1f3;color:#4a555c;
 }
 .chip.normal{background:var(--fill);color:var(--brand-dark)}
 .chip.danger{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-line);font-weight:600}
 .chip.leave,.chip.morning_leave,.chip.afternoon_leave{background:#fdf1e3;color:#8a5a13}
 .hours{
-  margin-left:auto;font-size:14px;font-weight:600;color:#0a5c70;
+  margin-left:auto;font-size:13px;font-weight:600;color:#0a5c70;
   font-variant-numeric:tabular-nums;
 }
-.log-content{font-size:14px;color:#3d464d;white-space:pre-wrap;word-break:break-word}
+.log-content{font-size:12.5px;line-height:1.5;color:#3d464d;white-space:pre-wrap;word-break:break-word}
 .log-content.empty{color:var(--ph);font-style:normal}
 .log-content.pending{color:var(--danger);font-weight:500}
 .hours.pending{color:var(--danger)}
-.log-slots{margin-top:8px;font-size:13px;color:#78838c;display:flex;flex-wrap:wrap;gap:6px}
-.log-slots span{padding:2px 7px;border-radius:5px;background:#f0f3f5}
+/* 时段：头部行内的小胶囊，不再单独占一行（margin-top 归零） */
+.log-slots{margin:0;font-size:12px;color:#78838c;display:flex;flex-wrap:wrap;gap:6px;flex:0 0 auto}
+.log-slots span{padding:1px 6px;border-radius:5px;background:#f0f3f5;white-space:nowrap}
 
 /* ---------- 提示 ---------- */
 .notice{
@@ -295,11 +369,6 @@ body.login-mode main{
 .lightbox-close:active{background:rgba(255,255,255,.4)}
 .shot-btns .cancel{border:1px solid var(--brand);background:#fff;color:var(--brand)}
 .shot-btns .ok{border:none;background:var(--brand);color:#fff}
-/* 已提交分支的「预览截图」按钮：notice 下方、.modal-btns 风格单按钮，与 .submit 区分 */
-.shot-action-row{margin-top:10px;display:flex}
-.shot-preview-btn{flex:1;min-height:44px;border-radius:9px;font-size:15px;font-family:inherit;cursor:pointer;border:1px solid var(--brand);background:#fff;color:var(--brand)}
-.shot-preview-btn:active{background:var(--fill)}
-
 /* ---------- toast ---------- */
 .toast{
   position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
@@ -333,9 +402,9 @@ body.login-mode main{
 /* 窄屏收紧筛选控件内边距，保证两列时值不被挤掉 */
 @media (max-width:400px){
   .filters{gap:8px}
-  .filters .field > label.picker-wrap{padding:0 38px 0 11px}
-  .picker-arrow{right:6px;width:26px;height:26px}
-  .picker-val{font-size:15px}
+  .filters .field > label.picker-wrap{padding:0 30px 0 10px}
+  .picker-arrow{right:7px}
+  .picker-val{font-size:13px}
 }
 
 /* ---------- 平板 / 桌面 ---------- */
@@ -389,25 +458,6 @@ body.login-mode main{
     <!-- ===== 视图：主界面 ===== -->
     <section id="mainView" hidden>
 
-      <div class="card">
-        <div class="filters">
-          <div class="field">
-            <label class="picker-wrap" for="dateInput">
-              <span class="picker-val" id="dateText"></span>
-              <span class="picker-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg></span>
-              <input class="picker-native" id="dateInput" type="date" aria-label="选择日期">
-            </label>
-          </div>
-          <div class="field">
-            <label class="picker-wrap" for="deptSelect">
-              <span class="picker-val" id="deptText"></span>
-              <span class="picker-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <select class="picker-native" id="deptSelect" aria-label="选择部门"></select>
-            </label>
-          </div>
-        </div>
-      </div>
-
       <div class="tabs" role="tablist">
         <button type="button" role="tab" id="tabWriteBtn" aria-selected="true">我的日志</button>
         <button type="button" role="tab" id="tabReadBtn" aria-selected="false">部门日志</button>
@@ -417,15 +467,37 @@ body.login-mode main{
 
       <!-- ===== 视图：写我的日志 ===== -->
       <div id="paneWrite">
-        <div class="card">
+        <!-- ① 筛选卡：日期/部门（+未绑定部门时的归属选择），与部门日志顶部卡同规格 -->
+        <div class="card write-top">
           <span class="sr-only" id="writeDateText"></span>
+
+          <!-- 日期/部门属于「当前视图」的筛选条件：切到部门日志时由 switchTab 搬进那张卡顶部 -->
+          <div class="filters" id="filtersBar">
+            <div class="field">
+              <label class="picker-wrap" for="dateInput">
+                <span class="picker-val" id="dateText"></span>
+                <span class="picker-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg></span>
+                <input class="picker-native" id="dateInput" type="date" aria-label="选择日期">
+              </label>
+            </div>
+            <div class="field">
+              <label class="picker-wrap" for="deptSelect">
+                <span class="picker-val" id="deptText"></span>
+                <span class="picker-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <select class="picker-native" id="deptSelect" aria-label="选择部门"></select>
+              </label>
+            </div>
+          </div>
 
           <div class="field" id="submitDeptField" hidden>
             <label for="submitDeptSelect">提交部门</label>
             <select class="select" id="submitDeptSelect"></select>
             <p class="hint">当前账号未绑定固定部门，请选择本次日志归属的部门。</p>
           </div>
+        </div>
 
+        <!-- ② 表单卡：三个字段（状态 / 内容 / 时间段），卡内靠间距分组，不插分隔线 -->
+        <div class="card write-form">
           <div class="field">
             <label>工作状态</label>
             <div class="seg" id="statusSeg">
@@ -446,41 +518,43 @@ body.login-mode main{
             </div>
           </div>
 
-          <div class="field">
+          <div class="field field-hours">
             <div class="field-head">
               <span class="field-label">工作时间段</span>
+              <span class="hours-inline">（共<span class="v" id="hoursValue">0</span>小时）</span>
               <button class="add-slot" id="addSlotBtn" type="button">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
                 添加
               </button>
             </div>
             <div class="slots" id="slotList"></div>
-            <p class="hint">时间需为 5 分钟倍数，且各时间段不可交叉重复。</p>
           </div>
+        </div>
 
-          <div class="field" style="margin-bottom:8px">
-            <div class="hours-bar">
-              <span class="k">今日工时</span>
-              <span class="v" id="hoursValue">0<small>小时</small></span>
-            </div>
-          </div>
-
+        <!-- ③ 状态胶囊（夹在表单卡与操作条之间）+ 操作条 -->
+        <div id="writeState" hidden></div>
+        <div id="writeActionBar">
           <button class="submit" id="submitBtn" type="button">提交日志</button>
           <p class="hint" id="submitHint"></p>
         </div>
       </div>
 
       <!-- ===== 视图：看部门日志 ===== -->
+      <!-- 三块：① 筛选（日期/部门）+ 统计卡；② 列表卡（内部滚动）；③ 底栏操作块（独立，卡片在其上方收尾）
+           列表在卡内滚动后，两个粘性机制（read-head 上粘、deptActionBar 下粘）都不再需要 -->
       <div id="paneRead" hidden>
-        <div class="card">
-          <div class="card-title">
-            <h2 id="readTitle">当日日志</h2>
-            <span class="sub" id="readCount"></span>
+        <div class="card read-top">
+          <!-- 筛选行由 switchTab 插到 read-head 首位 -->
+          <div class="read-head">
+            <div class="stats" id="deptStats"></div>
           </div>
-          <div class="stats" id="deptStats"></div>
-          <div id="readContent"><div class="loading">加载中…</div></div>
-          <div id="deptActionBar"></div>
         </div>
+        <div class="card read-list-card">
+          <div id="readContent"><div class="loading">加载中…</div></div>
+        </div>
+        <!-- 状态标签：夹在列表卡与操作条之间（淡青胶囊），不占操作条高度 -->
+        <div id="deptState" hidden></div>
+        <div id="deptActionBar"></div>
       </div>
 
     </section>
@@ -603,8 +677,37 @@ function nowHHmm() {
 function safeGet(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
 }
+/* 配额写满时 setItem 抛 QuotaExceededError（Safari 走 code 22/1014，name 也不同）。
+   静默吞掉的代价不只是丢草稿：登录态也走这里，写不进去会让用户刷新后直接掉登录，
+   所以先按保留策略清一遍，仍然失败再把结论说出来（每个会话只提示一次）。 */
+function isQuotaError(e) {
+  if (!e) return false;
+  return e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    || e.code === 22 || e.code === 1014;
+}
+var storageFullNoticed = false;
+function warnStorageFull(isAuth) {
+  if (storageFullNoticed) return;
+  storageFullNoticed = true;
+  if (!document.getElementById('noticeArea')) return;
+  setNotice('storage', 'error', (isAuth
+    ? '本机存储已满，登录状态可能无法在刷新后保留'
+    : '本机存储已满，草稿可能无法保存') + '，请在浏览器设置中清理本站数据后重试。');
+}
 function safeSet(key, val) {
-  try { localStorage.setItem(key, val); } catch (e) { /* 忽略存储失败 */ }
+  try { localStorage.setItem(key, val); return true; }
+  catch (e) {
+    if (!isQuotaError(e)) return false;
+    // 分两级腾空间：先回收过期键，仍写不进去才让近期缓存让位（草稿始终不动）
+    var tiers = [false, true];
+    for (var i = 0; i < tiers.length; i++) {
+      if (!pruneStorage(key, tiers[i])) continue;    // 这一档没东西可清，直接进下一档
+      try { localStorage.setItem(key, val); return true; }
+      catch (e2) { if (!isQuotaError(e2)) return false; }
+    }
+    warnStorageFull(key === STORE_AUTH);
+    return false;
+  }
 }
 function safeDel(key) {
   try { localStorage.removeItem(key); } catch (e) { /* 忽略 */ }
@@ -886,6 +989,8 @@ function renderAuthState() {
   if (logged) {
     var name = state.auth.realName || ('用户' + (state.auth.userId || ''));
     $('whoText').textContent = name + (state.auth.deptName ? ' · ' + state.auth.deptName : '');
+    syncStickyOffsets();   // 主界面刚显示出来，此时才能量到顶栏/标签页真实高度
+    setTimeout(syncStickyOffsets, 120);
   } else {
     $('whoText').textContent = '';
   }
@@ -942,6 +1047,14 @@ function doLogout() {
   state.myLog = null;
   state.deptLogs = [];
   state.depts = [];
+  // 日期/部门维度一起复位：否则同页登出再登录会停在登出前的日期，容易写到过去某天
+  state.date = todayStr();
+  state.viewDeptId = '';
+  state.submitDeptId = '';
+  state.myLogLoadedKey = '';
+  state.deptLogKey = '';
+  state.deptSubmitted = false;
+  state.form = { workStatus: 'normal', workContent: '', workTimeSlots: [] };
   renderAuthState();
   $('username').value = '';
   $('password').value = '';
@@ -1008,8 +1121,13 @@ function readCache(date, deptId) {
   try { return JSON.parse(raw); } catch (e) { return null; }
 }
 
+/* 同一份 rows 要写两个键时（mine_/部门），用已序列化好的字符串，省一次 stringify */
+function writeCacheJson(date, deptId, json) {
+  safeSet(cacheKey(date, deptId), json);
+}
+
 function writeCache(date, deptId, rows) {
-  try { safeSet(cacheKey(date, deptId), JSON.stringify(rows)); } catch (e) { /* 忽略 */ }
+  writeCacheJson(date, deptId, JSON.stringify(rows));
 }
 
 async function fetchLogs(date, deptId) {
@@ -1044,39 +1162,52 @@ async function loadMyLog() {
     state.myLog = null;
     state.myLogLoadedKey = '';
     renderWritePane();
-    return;
+    return null;
   }
-  var rows = await fetchLogs(state.date, myDeptId);
-  writeCache(state.date, 'mine_' + myDeptId, rows);
+  // 快照本次请求维度：等待期间用户切了日期/部门，结果只能落到快照对应的键上
+  var reqDate = state.date;
+  var rows = await fetchLogs(reqDate, myDeptId);
+  var json = JSON.stringify(rows);   // 部门视图同参数时直接复用，省一次序列化
+  writeCacheJson(reqDate, 'mine_' + myDeptId, json);
+  if (state.date !== reqDate || resolveSubmitDeptId() !== myDeptId) return null;  // 已切换，丢弃迟到结果
   state.myLog = rows.filter(function (r) {
     return String(r.userId) === String(state.auth.userId);
   })[0] || null;
-  state.myLogLoadedKey = myLogKey();
+  state.myLogLoadedKey = reqDate + '|' + myDeptId;
   applyMyLogToForm();
+  return { date: reqDate, deptId: myDeptId, rows: rows, json: json };
+}
+
+/* 部门日志落状态：请求成功与「复用我的日志结果」两条路径共用，避免两处口径漂移 */
+function applyDeptRows(rows, date, deptId) {
+  var list = Array.isArray(rows) ? rows : [];   // 缓存可能被外部改坏，非数组按空处理
+  state.deptLogs = list;
+  state.deptSubmitted = !!deptId && list.some(function (r) {
+    return Number(r.isDeptSubmit) === 1;
+  });
+  state.deptLogKey = date + '|' + (deptId || 'all');
+  renderReadPane();
 }
 
 async function loadDeptLogs() {
   var deptId = state.viewDeptId;
+  // 同 loadMyLog：缓存与内存态都按快照维度落，避免旧数据被写成新日期的缓存
+  var reqDate = state.date;
+  var offline = false;
   try {
-    var rows = await fetchLogs(state.date, deptId);
-    state.deptLogs = rows;
-    writeCache(state.date, deptId, rows);
-    offlineNotice = false;
+    var rows = await fetchLogs(reqDate, deptId);
+    writeCache(reqDate, deptId, rows);
+    if (state.date !== reqDate || state.viewDeptId !== deptId) return;
   } catch (e) {
     if (e.message === 'AUTH_EXPIRED') throw e;
-    var cached = readCache(state.date, deptId);
-    if (cached) {
-      state.deptLogs = cached;
-      offlineNotice = true;
-    } else {
-      throw e;
-    }
+    var cached = readCache(reqDate, deptId);
+    if (!cached) throw e;
+    if (state.date !== reqDate || state.viewDeptId !== deptId) return;
+    rows = cached;
+    offline = true;
   }
-  state.deptSubmitted = !!state.viewDeptId && state.deptLogs.some(function (r) {
-    return Number(r.isDeptSubmit) === 1;
-  });
-  state.deptLogKey = state.date + '|' + (state.viewDeptId || 'all');
-  renderReadPane();
+  offlineNotice = offline;
+  applyDeptRows(rows, reqDate, deptId);
 }
 
 var offlineNotice = false;
@@ -1100,6 +1231,62 @@ function pruneLegacyDrafts() {
     drop.forEach(function (k) { safeDel(k); });
   } catch (e) { /* 存储不可用静默 */ }
 }
+
+/* 存储水位：缓存与草稿的键里都带日期，只保留最近 STORE_KEEP_DAYS 天 + 当前维度。
+   登录态 / 使用时间等非本模块键一律不动；safeSet 撞配额时也会调这里腾空间 */
+var STORE_KEEP_DAYS = 7;
+/* 缓存总体积预算（UTF-16 码元近似，中文 JSON 约 1 码元/汉字）：
+   配额是按字节算的，光靠天数兜不住大部门——1000 行 × 两键 ≈ 711K 码元/天，
+   7 天正好贴到 5MB 上限，任何额外键都会触发配额急救，所以再加一层体积上限 */
+var STORE_BUDGET_CHARS = 2 * 1024 * 1024;
+function storageCutoff() {
+  var d = new Date(Date.now() - STORE_KEEP_DAYS * 86400000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    + '-' + String(d.getDate()).padStart(2, '0');
+}
+function storageDateOf(k) {
+  // 缓存键 lw_h5_cache_<date>_<dept|all|mine_x>；草稿键 lw_h5_draft_<uid>|<date>|<dept>
+  var d = '';
+  if (k.indexOf(CACHE_PREFIX) === 0) d = k.slice(CACHE_PREFIX.length).split('_')[0] || '';
+  else if (k.indexOf(DRAFT_PREFIX) === 0) d = k.slice(DRAFT_PREFIX.length).split('|')[1] || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';   // 认不出日期的一律不动，避免误删
+}
+/* 两档清理，由调用方决定用哪档：
+   默认档（启动时走这档）只删「超过保留期」的键，再按体积预算从最旧日期淘汰超额缓存；
+   预算内的近期缓存一律不动，否则断网时 readCache 回退没得读，页面从「显示本机缓存」
+   退化成「读取失败」；
+   aggressive 档把近期缓存全部让位（草稿始终保留），仅在配额写不进去时使用。 */
+function pruneStorage(keepKey, aggressive) {
+  try {
+    var cutoff = storageCutoff(), stale = [], recent = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k === keepKey) continue;
+      var d = storageDateOf(k);
+      if (!d) continue;
+      if (d < cutoff) stale.push(k);
+      else if (k.indexOf(CACHE_PREFIX) === 0) recent.push({ k: k, d: d });
+    }
+    var drop = stale.slice();
+    if (aggressive) {
+      // 配额急救档：近期缓存全部让位（草稿始终保留）
+      recent.forEach(function (e) { drop.push(e.k); });
+    } else {
+      // 常规档：天数以内再加体积预算，超预算从最旧日期开始淘汰；草稿不计也不删
+      var items = recent.map(function (e) {
+        return { k: e.k, d: e.d, size: e.k.length + (safeGet(e.k) || '').length };
+      });
+      items.sort(function (a, b) { return a.d < b.d ? -1 : (a.d > b.d ? 1 : 0); });
+      var used = items.reduce(function (n, e) { return n + e.size; }, 0);
+      for (var j = 0; j < items.length && used > STORE_BUDGET_CHARS; j++) {
+        drop.push(items[j].k);
+        used -= items[j].size;
+      }
+    }
+    drop.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+    return drop.length;
+  } catch (e) { return 0; }
+}
 function readDraft() {
   if (!state.auth) return null;
   try {
@@ -1112,12 +1299,25 @@ function readDraft() {
 }
 function persistDraft() {
   if (!state.auth) return;
+  // 与初始空白表单完全一致（「点了一下标签/敲了又删」留下的空壳）没有信息量，
+  // 存下来只会在下次打开时盖住服务端记录，所以直接不落盘并清掉旧键
+  if (!draftDirty(state.form, null)) {
+    try { safeDel(draftKey()); } catch (e) { /* 忽略 */ }
+    return;
+  }
+  // 与服务端记录完全一致就没有草稿价值（已提交且未改动也落在这里）；清掉旧键避免下次误恢复。
+  // 区别于旧版：不再因为「已提交」就一律删草稿，已提交日志的未提交修改也能保住。
+  if (state.myLog && !draftDirty(state.form, state.myLog)) {
+    try { safeDel(draftKey()); } catch (e) { /* 忽略 */ }
+    return;
+  }
   try {
     safeSet(draftKey(), JSON.stringify({ form: state.form, at: Date.now() }));
   } catch (e) { /* 存储失败静默 */ }
 }
 function writeDraft() {
   if (!state.auth) return;
+  renderSubmitState();   // 状态行随编辑实时更新；只改文案不重绘表单，避免输入时丢光标
   clearTimeout(draftTimer);
   draftTimer = setTimeout(persistDraft, 400);
 }
@@ -1164,12 +1364,19 @@ function applyMyLogToForm() {
   var log = state.myLog;
   var draft = readDraft();
   var serverContent = log ? (log.workContent || '') : '';
+  // 空壳草稿（内容空 + 状态 normal + 默认时段，等于初始表单）不算草稿：
+  // 它和服务端记录必然「不同」，若让它参与恢复，就会把服务端的真实内容盖成空。
+  // 顺带把这条脏草稿清掉，避免下次再踩。
+  if (draft && !draftDirty(draft.form, null)) { clearDraft(); draft = null; }
+  // 与服务端记录完全一致的草稿没有价值（含「已提交且未改动」），顺手清掉；
+  // 有真实差异的草稿保留 —— 已提交日志的未提交修改也不该丢（旧版这里是「有内容就丢」）
+  if (draft && log && !draftDirty(draft.form, log)) { clearDraft(); draft = null; }
   // 草稿异于服务端/初始态（内容、工作状态、时间段任一不同）→ 优先恢复，保住未提交修改
   if (draft && draftDirty(draft.form, log)) {
     state.form.workStatus = STATUS_LABEL[draft.form.workStatus] ? draft.form.workStatus : 'normal';
     state.form.workContent = draft.form.workContent || '';
     state.form.workTimeSlots = Array.isArray(draft.form.workTimeSlots) ? draft.form.workTimeSlots : defaultSlotsFor(state.form.workStatus);
-    setNotice('draft', 'info', log ? '已恢复本机未提交的修改（与服务器记录不同）。' : '已恢复本机保存的未提交草稿。');
+    // 不再单独弹「已恢复本机草稿」提示：提交状态行已经表达同一件事，避免两处重复
   } else if (log) {
     state.form.workStatus = STATUS_LABEL[log.workStatus] ? log.workStatus : 'normal';
     state.form.workContent = serverContent;
@@ -1183,8 +1390,7 @@ function applyMyLogToForm() {
     state.form.workTimeSlots = defaultSlotsFor('normal');
     clearNotice(['draft']);
   }
-  renderWritePane();
-  renderHours();
+  renderWritePane();   // 内部已含 renderSlots + renderHours + renderSubmitState，不再重复调用
 }
 
 function defaultSlotsFor(status) {
@@ -1213,6 +1419,41 @@ function renderSubmitDeptField() {
   $('deptText').textContent = vd ? vd.deptName : (state.depts[0] ? state.depts[0].deptName : '');
 }
 
+/* 提交状态行 + 按钮文案：接口只回日志本身、没有提交时间字段，
+   所以只表达三种确定状态（已提交 / 有未提交改动 / 尚未提交），不编造时间 */
+function hasSubmittedLog() {
+  return !!(state.myLog && (state.myLog.workContent || '').trim());
+}
+function renderSubmitState() {
+  var el = $('writeState');
+  var btn = $('submitBtn');
+  if (!el || !btn) return;
+  // 提交进行中不改按钮文案：postLog 已把按钮设成「提交中…」，此时编辑表单会走到这里，
+  // 若无条件重写文案就会变成「更新日志/提交日志」，误导用户以为请求结束了
+  if (state.busy) return;
+  var deptId = resolveSubmitDeptId();
+  // 还没读到服务端记录时不给结论，避免把「加载中」说成「未提交」
+  if (!deptId || state.myLogLoadedKey !== myLogKey()) {
+    el.hidden = true;
+    btn.textContent = '提交日志';
+    return;
+  }
+  var submitted = hasSubmittedLog();
+  var dirty = draftDirty(state.form, state.myLog);
+  btn.textContent = submitted ? '更新日志' : '提交日志';
+  var ok = submitted && !dirty;                 // 已保存且无改动 = 正向状态，用中性色
+  var text;
+  if (dirty) {
+    text = submitted ? '改动未保存，刷新会还原为已提交版本' : '有未提交的草稿，确认后点「提交日志」';
+  } else if (submitted) {
+    text = '今日日志已提交';
+  } else {
+    text = '今日日志尚未提交';
+  }
+  el.hidden = false;
+  el.innerHTML = '<span class="dept-state' + (ok ? ' ok' : '') + '">' + esc(text) + '</span>';
+}
+
 function renderWritePane() {
   $('writeDateText').textContent = state.date;
   $('dateText').textContent = state.date;
@@ -1227,7 +1468,6 @@ function renderWritePane() {
   Array.prototype.forEach.call(segBtns, function (b) {
     var st = b.getAttribute('data-status');
     b.setAttribute('aria-pressed', st === state.form.workStatus ? 'true' : 'false');
-    if (st !== 'normal') b.classList.add('leave-chip');
   });
 
   renderSubmitDeptField();
@@ -1247,6 +1487,7 @@ function renderWritePane() {
 
   renderSlots();
   renderHours();
+  renderSubmitState();
 }
 
 function renderSlots() {
@@ -1272,6 +1513,7 @@ function renderSlots() {
     start.addEventListener('change', function () {
       handleSlotTime(idx, 'startTime', start.value);
     });
+
 
     var dash = document.createElement('span');
     dash.className = 'dash';
@@ -1310,17 +1552,20 @@ function renderSlots() {
 function handleSlotTime(idx, key, value) {
   var slot = state.form.workTimeSlots[idx];
   if (!slot) return;
-  writeDraft();
 
   if (value && !isFiveStep(value)) {
-    toast('时间必须是 5 分钟的倍数');
+    // 原生 time 选择器按 step=300 只能选 5 分钟倍数，这里是手动键入/粘贴的兜底；
+    // 提示写明被调整成什么，避免用户只看到规则却不知道值变了
     slot[key] = snapFive(value);
+    writeDraft();          // 赋值之后再落盘/重绘状态，否则胶囊拿到的是旧表单
+    toast(value + ' 已按 5 分钟调整为 ' + slot[key]);
     renderSlots();
     renderHours();
     return;
   }
 
   slot[key] = value;
+  writeDraft();            // 同上：先改值再写，400ms 防抖落盘照旧
 
   var a = toMinutes(slot.startTime);
   var b = toMinutes(slot.endTime);
@@ -1339,7 +1584,7 @@ function handleSlotTime(idx, key, value) {
 
 function renderHours() {
   var h = calcHours(state.form.workTimeSlots);
-  $('hoursValue').innerHTML = h + '<small>小时</small>';
+  $('hoursValue').textContent = h;
 }
 
 /* 状态切换：与 PC 端行为一致 */
@@ -1374,16 +1619,28 @@ function setStatus(status) {
 }
 
 /* ---------- 渲染：读 ---------- */
+/* 只读页底部：状态标签（胶囊）夹在列表卡与操作条之间，操作条只留按钮 */
 function renderDeptActions() {
   var box = $('deptActionBar');
+  var st = $('deptState');
   if (!state.viewDeptId) {
-    box.innerHTML = '<div class="notice info">选择具体部门后，可提交该部门的当日日志。</div>';
+    // 未选部门：没有可提交的对象，只留一句说明，不出按钮
+    st.hidden = false;
+    st.innerHTML = '<span class="dept-state">选择具体部门后可提交当日日志</span>';
+    box.hidden = true;
+    box.innerHTML = '';
     return;
   }
+  box.hidden = false;
+  st.hidden = false;
   if (state.deptSubmitted) {
+    // 已提交：状态做成胶囊标签（不再重复日期，日期已在顶部筛选行显示）+ 截图入口
+    // 已提交 = 完成态，与「我的日志」的已提交提示统一为青色（ok）
+    st.innerHTML = '<span class="dept-state ok">部门日志已提交</span>';
     box.innerHTML =
-      '<div class="notice info">该部门在 ' + esc(state.date) + ' 的日志已提交。</div>' +
-      '<div class="shot-action-row"><button class="shot-preview-btn" id="previewShotBtn" type="button">预览截图</button></div>';
+      '<div class="bar">' +
+        '<button class="submit" id="previewShotBtn" type="button">预览截图</button>' +
+      '</div>';
     $('previewShotBtn').addEventListener('click', function () {
       openShotPreview().catch(function (e) {
         if (e.message !== 'AUTH_EXPIRED') toast(e.message);
@@ -1391,9 +1648,25 @@ function renderDeptActions() {
     });
     return;
   }
+  // 未提交：按填写情况分两态——有人没写（红字提醒）/ 全员已填（中性色，正向确认）
+  // 两种情况标签都在，胶囊高度恒定，切日期时列表不跳动
+  var all = state.deptLogs || [];
+  var total = all.length;
+  var done = 0;
+  all.forEach(function (r) { if ((r.workContent || '').trim() !== '') done++; });
+  var hintHtml;
+  if (total && done >= total) {
+    hintHtml = '<span class="dept-state ok">已全部填写，可提交</span>';
+  } else if (total) {
+    hintHtml = '<span class="dept-state">还有 ' + (total - done) + ' 人未填写</span>';
+  } else {
+    hintHtml = '<span class="dept-state">确认全员已填写后再提交</span>';
+  }
+  st.innerHTML = hintHtml;
   box.innerHTML =
-    '<p class="dept-tip">提交前请确认该部门所有人都已填写当天日志。</p>' +
-    '<button class="submit" id="submitDeptBtn" type="button">提交部门日志</button>';
+    '<div class="bar">' +
+      '<button class="submit" id="submitDeptBtn" type="button">提交部门日志</button>' +
+    '</div>';
   $('submitDeptBtn').addEventListener('click', askSubmitDeptLog);
 }
 
@@ -1401,16 +1674,20 @@ function renderDeptStats() {
   var rows = state.deptLogs || [];
   var filled = 0, leave = 0, sum = 0;
   rows.forEach(function (r) {
-    if ((r.workContent || '').trim()) filled++;
+    var hasContent = (r.workContent || '').trim() !== '';
+    if (hasContent) filled++;
     if (r.workStatus && r.workStatus !== 'normal') leave++;
-    var h = Number(r.workHours);
-    if (isFinite(h)) sum += h;
+    // 工时只统计已填写正文的人，与「已填写」同一口径，避免未填人的默认工时把总数抬高
+    if (hasContent) {
+      var h = Number(r.workHours);
+      if (isFinite(h)) sum += h;
+    }
   });
   var items = [
-    { k: '共', v: rows.length },
+    { k: '总人数', v: rows.length },
     { k: '已填写', v: filled },
     { k: '请假', v: leave },
-    { k: '总工时', v: Math.round(sum * 10) / 10 }
+    { k: '已填工时', v: Math.round(sum * 10) / 10 }
   ];
   $('deptStats').innerHTML = items.map(function (i) {
     return '<div class="stat"><span class="k">' + i.k + '</span><span class="v">' + i.v + '</span></div>';
@@ -1421,8 +1698,7 @@ function renderReadPane() {
   renderDeptStats();
   renderDeptActions();
   var box = $('readContent');
-  $('readTitle').textContent = deptNameOf(state.viewDeptId) + ' · ' + state.date;
-  $('readCount').textContent = state.deptLogs.length ? state.deptLogs.length + ' 人' : '';
+  // 视图名由标签页承担、人数由统计块「总人数」承担，这里不再重复标题
 
   if (offlineNotice) {
     setNotice('offline', 'warn', '当前网络不可用，显示的是本机缓存数据，可能不是最新。');
@@ -1458,10 +1734,11 @@ function renderReadPane() {
     } else {
       html.push('<span class="chip ' + status + '">' + esc(STATUS_LABEL[status]) + '</span>');
     }
+    // 时段胶囊放在工时之前：常态与头部同一行，宽度不够时由 flex-wrap 折到下一行
+    if (slots) html.push('<span class="log-slots">' + slots + '</span>');
     html.push('<span class="hours' + (pending ? ' pending' : '') + '">' + (pending ? '—' : (row.workHours == null ? '—' : esc(row.workHours) + ' 小时')) + '</span>');
     html.push('</div>');
     html.push('<div class="log-content' + (pending ? ' pending' : (content ? '' : ' empty')) + '">' + (pending ? '未填写工作内容，当日日志尚未提交' : (content ? esc(content) : '未填写工作内容')) + '</div>');
-    if (slots) html.push('<div class="log-slots">' + slots + '</div>');
     html.push('</div>');
   });
   html.push('</div>');
@@ -1571,7 +1848,9 @@ async function postLog() {
     if (e.message !== 'AUTH_EXPIRED') toast(e.message);
   } finally {
     state.busy = false;
-    btn.textContent = '提交日志';
+    // busy 放开后补一次状态行重绘：提交成功后胶囊才会从「改动未保存」切到「今日日志已提交」，
+    // 按钮文案也由 renderSubmitState 统一写，避免两处各维护一份
+    renderSubmitState();
     btn.disabled = state.myLogLoadedKey !== myLogKey();
   }
 }
@@ -1634,13 +1913,30 @@ var SHOT_FONT = '16px -apple-system, "PingFang SC", "Microsoft YaHei", sans-seri
 
 function shotColX(i) { var x = SHOT_TABLE_X; for (var k = 0; k < i; k++) x += SHOT_COLS[k]; return x; }
 
+/* Canvas 的 fillText 不展开 \t，而 PC 端 HTML 按 8 字符制表位展开。
+   这里按同样规则补空格（如 "1.\t测试" → "1.      测试"），保持与 PC 截图一致 */
+function shotExpandTabs(seg) {
+  var out = '', col = 0;
+  Array.from(seg).forEach(function (ch) {
+    if (ch === '\t') {
+      var n = 8 - (col % 8);
+      out += '          '.slice(0, n);
+      col += n;
+    } else {
+      out += ch;
+      col++;
+    }
+  });
+  return out;
+}
+
 /* 按列宽硬切换行：字符累积 + measureText，不靠空格分词；保留原文 \n 分段。
    用 Array.from 按码点迭代，避免把 emoji 等代理对劈成半个码元 */
 function shotWrap(ctx, text, maxW) {
   var out = [];
   String(text == null ? '' : text).split('\n').forEach(function (seg) {
     var line = '';
-    Array.from(seg).forEach(function (ch) {
+    Array.from(shotExpandTabs(seg)).forEach(function (ch) {
       if (line && ctx.measureText(line + ch).width > maxW) { out.push(line); line = ch; }
       else { line += ch; }
     });
@@ -1668,7 +1964,10 @@ function buildShotCanvas() {
   var bottomPad = 20;
   var rowHeights = [];
   var rowTops = [];
+  var rowLines = [];      // 测量阶段已算好的折行结果，绘制阶段直接复用，避免整表重跑 measureText
+  var rowPeriods = [];
   var totalH = titleBottom + headerH;
+  var truncated = false;
   ctx.font = SHOT_FONT;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -1677,12 +1976,15 @@ function buildShotCanvas() {
     var ch = contentLines.length * SHOT_LINE_H;
     var ph = periods.length * SHOT_PERIOD_H + Math.max(0, periods.length - 1) * SHOT_PERIOD_GAP;
     var rh = Math.max(ch, ph, SHOT_LINE_H) + SHOT_CELL_PAD * 2;
+    // 放不下的行不会绘制，测量也到此为止：与绘制用同一判据，让 rowHeights 长度成为
+    // 「可绘制行数」的唯一事实源。否则 1000 行部门要测 1000 行、只画 127 行，约 87% 白跑
+    if (totalH + rh > SHOT_MAX_H - bottomPad) { truncated = true; break; }
     rowHeights.push(rh);
+    rowLines.push(contentLines);
+    rowPeriods.push(periods);
     totalH += rh;
   }
-  totalH += bottomPad;
-  var truncated = false;
-  if (totalH > SHOT_MAX_H) { totalH = SHOT_MAX_H; truncated = true; }
+  totalH += bottomPad;   // 循环内已保证 totalH ≤ SHOT_MAX_H，不再二次截断（避免空白底边）
 
   // 2) 一次性定高，此后不再改 width/height
   canvas.width = SHOT_W;
@@ -1695,7 +1997,8 @@ function buildShotCanvas() {
   var yHeader = titleBottom;                // 表头顶线
   var rowY = yHeader + headerH;            // 表头底线 / 数据起始
   var ry = rowY;
-  for (var i = 0; i < rows.length; i++) { rowTops.push(ry); ry += rowHeights[i]; }
+  // 与测量同一口径：只对参与绘制的行算 top，rowHeights 之外的下标不存在，避免 undefined → NaN 传染
+  for (var i = 0; i < rowHeights.length; i++) { rowTops.push(ry); ry += rowHeights[i]; }
   var tableBottom = ry;
 
   // 标题（.screenshot-title: 20px/700/center/#000，margin-bottom 20）
@@ -1741,16 +2044,14 @@ function buildShotCanvas() {
   // 数据行：单元格垂直居中（vertical-align:middle），内容左对齐、序号/姓名/时长/时段居中
   ctx.font = SHOT_FONT;
   ctx.fillStyle = '#000';
-  for (var i = 0; i < rows.length; i++) {
+  for (var i = 0; i < rowHeights.length; i++) {
     var top = rowTops[i], rh = rowHeights[i];
-    if (top + rh > SHOT_MAX_H - bottomPad) { truncated = true; break; }
     var r = rows[i];
-    var contentLines = shotWrap(ctx, r.workContent || '', SHOT_COLS[3] - 16);
-    var periods = (Array.isArray(r.workTimeSlots) ? r.workTimeSlots : []).map(shotPeriodLine).filter(Boolean);
+    var contentLines = rowLines[i];       // 复用测量结果
+    var periods = rowPeriods[i];
     var ch = contentLines.length * SHOT_LINE_H;
     var ph = periods.length * SHOT_PERIOD_H + Math.max(0, periods.length - 1) * SHOT_PERIOD_GAP;
-    var blockH = Math.max(ch, ph, SHOT_LINE_H);
-    var blockTop = top + (rh - blockH) / 2;
+    var contentTop = top + (rh - ch) / 2;                                                   // 工作内容块独立垂直居中
     var centerY = top + rh / 2;
 
     ctx.textAlign = 'center';
@@ -1762,11 +2063,12 @@ function buildShotCanvas() {
     if (hText) ctx.fillText(hText, shotColX(2) + SHOT_COLS[2] / 2, centerY);
     ctx.textAlign = 'left';                                                                 // 工作内容左对齐逐行
     for (var l = 0; l < contentLines.length; l++) {
-      ctx.fillText(contentLines[l], shotColX(3) + 8, blockTop + l * SHOT_LINE_H + SHOT_LINE_H / 2);
+      ctx.fillText(contentLines[l], shotColX(3) + 8, contentTop + l * SHOT_LINE_H + SHOT_LINE_H / 2);
     }
-    ctx.textAlign = 'center';                                                              // 时间段居中逐行
+    ctx.textAlign = 'left';                                                                // 时间段左对齐逐行（对齐 PC）
+    var timeTop = top + (rh - ph) / 2;                                                      // 时间段块独立垂直居中
     for (var p = 0; p < periods.length; p++) {
-      ctx.fillText(periods[p], shotColX(4) + SHOT_COLS[4] / 2, blockTop + p * SHOT_PERIOD_H + SHOT_PERIOD_H / 2);
+      ctx.fillText(periods[p], shotColX(4) + 8, timeTop + p * (SHOT_PERIOD_H + SHOT_PERIOD_GAP) + SHOT_PERIOD_H / 2);
     }
   }
   if (truncated) {
@@ -1828,7 +2130,9 @@ function invalidateShotBlob() {
 function withShotBlob(canvas, cb) {
   if (shotBlobCache) { cb(shotBlobCache); return; }
   canvas.toBlob(function (blob) {
-    if (blob) shotBlobCache = blob;
+    // 编码在飞时预览被关掉（releaseShotCanvas 已把画布置 0×0），晚到的结果不许进缓存，
+    // 否则下次打开会直接复用这张残图
+    if (blob && canvas.width > 0 && canvas.height > 0) shotBlobCache = blob;
     cb(blob);
   }, 'image/png');
 }
@@ -1840,20 +2144,29 @@ function configureShotCopyBtn() {
   var canvas = $('shotCanvas');
   var canCopy = window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.write === 'function'
     && typeof ClipboardItem !== 'undefined';
-  btn.hidden = false;
+  // 能力判定依赖 Blob（异步），先藏起来：否则大图编码的几百毫秒里按钮先冒充「复制截图」，
+  // 用户在 http 手机上抢点会走到复制分支拿到「无法复制」的错
+  btn.hidden = true;
   btn.dataset.mode = 'copy';
   btn.textContent = '复制截图';
+  // 非安全上下文：share 与 clipboard 都被浏览器禁用（http 下 navigator.share 常常存在但
+  // canShare({files}) 恒为 false，按存在性判会漏），直接隐藏。这里刻意不预热 Blob——
+  // 按钮都藏了，把编码留给真正要用的人：下载自带 toBlob 路径，灯箱在 openLb 里异步编码一次
+  // 并回填 shotBlobCache，之后复用；不点这两处的用户不为一次 5–7MB 的 PNG 编码买单
+  if (!window.isSecureContext) return;
   withShotBlob(canvas, function (blob) {
     if (!blob) return;
     try {
       var file = new File([blob], shotFileName(), { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (typeof navigator.share === 'function' && navigator.canShare && navigator.canShare({ files: [file] })) {
         btn.dataset.mode = 'forward';
         btn.textContent = '转发';
+        btn.hidden = false;
         return;
       }
     } catch (e) { /* 旧浏览器无 File 构造，保持复制/隐藏判定 */ }
-    if (!canCopy) btn.hidden = true;
+    if (!canCopy) { btn.hidden = true; return; }
+    btn.hidden = false;
   });
 }
 
@@ -1867,27 +2180,40 @@ function onShotCopyClick() {
 /* 转发：Web Share 文件分享，拉起系统分享面板（微信/QQ 等由系统列出，点选即发）；不支持则提示走下载。
    files 分享要求安全上下文(https)，http 内网 canShare 返回 false，此时按钮隐藏、不出现无效入口 */
 function forwardShot(canvas) {
-  withShotBlob(canvas, function (blob) {
-    if (!blob) { toast('截图生成失败'); return; }
-    try {
-      var file = new File([blob], shotFileName(), { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        var dept = deptNameOf(state.viewDeptId);
-        navigator.share({
-          files: [file],
-          title: '工作日志截图',
-          text: '[' + dept + '][' + state.date + ']工作日志'
-        }).catch(function () { /* 用户取消分享，静默 */ });
-        return;
-      }
-    } catch (e) { /* 落到提示 */ }
-    toast('当前浏览器不支持直接转发，请用下载截图');
-  });
+  // share() 必须在用户手势的同步调用栈里执行；缓存未就绪时不走异步 toBlob 回调，
+  // 否则手机浏览器会因用户激活失效而静默拒绝。缓存已在打开弹窗时预热。
+  if (!shotBlobCache) { toast('截图生成中，请稍后再试'); return; }
+  var blob = shotBlobCache;
+  try {
+    var file = new File([blob], shotFileName(), { type: 'image/png' });
+    if (typeof navigator.share === 'function' && navigator.canShare && navigator.canShare({ files: [file] })) {
+      var dept = deptNameOf(state.viewDeptId);
+      navigator.share({
+        files: [file],
+        title: '工作日志截图',
+        text: '[' + dept + '][' + state.date + ']工作日志'
+      }).catch(function (err) {
+        if (err && err.name === 'AbortError') return;   // 用户主动取消，静默
+        toast('转发失败，请用下载截图');
+      });
+      return;
+    }
+  } catch (e) { /* 落到提示 */ }
+  toast('当前浏览器不支持直接转发，请用下载截图');
 }
 
 function closeShotPreview() {
   shotPreviewToken++;   // 使正在进行的门控结果作废，关闭后不得再自动开窗
   closeModal($('shotMask'), null);
+  releaseShotCanvas();
+}
+
+/* 关闭即释放位图：常态 1130×1200~1600 的 RGBA 约 5–7MB，内容超长截断到 8000px 时达 36MB；
+   留着等下次预览没有任何收益，重开时 buildShotCanvas 会重新定尺寸重绘 */
+function releaseShotCanvas() {
+  var c = $('shotCanvas');
+  if (c && (c.width || c.height)) { c.width = 0; c.height = 0; }
+  invalidateShotBlob();   // 连带清掉 PNG 缓存并 revoke objectURL
 }
 
 /* 导出文件名：日期_部门.png，非法文件名字符替换为 _ */
@@ -1930,8 +2256,9 @@ function copyShot(canvas) {
 /* ---------- 刷新 ---------- */
 async function refresh() {
   clearNotice(['my', 'dept']);
+  var mine = null;
   try {
-    await loadMyLog();
+    mine = await loadMyLog();
   } catch (e) {
     if (e.message === 'AUTH_EXPIRED') return;
     var myDeptId = resolveSubmitDeptId();
@@ -1944,14 +2271,31 @@ async function refresh() {
       applyMyLogToForm();
       setNotice('my', 'warn', '网络不可用，当前显示本机缓存的「我的日志」，提交前请确认内容。');
     } else {
+      // 没缓存又读失败：必须清掉上一天的记录，否则表单会留着旧内容、按钮还能提交
+      state.myLog = null;
+      state.myLogLoadedKey = '';
+      applyMyLogToForm();   // 按新维度重算表单（有本机草稿则恢复，否则回到初始态）
       setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
     }
   }
 
   try {
-    await loadDeptLogs();
+    // 绑定部门账号下 viewDeptId 与提交部门是同一个，GetWorklogs 的 date/deptId/page/pageSize
+    // 完全一致：直接复用「我的日志」那次结果，省掉一次整表请求 + 一次解析 + 一次序列化
+    if (mine && mine.date === state.date && mine.deptId === String(state.viewDeptId || '')) {
+      writeCacheJson(mine.date, mine.deptId, mine.json);
+      offlineNotice = false;
+      applyDeptRows(mine.rows, mine.date, mine.deptId);
+    } else {
+      await loadDeptLogs();
+    }
   } catch (e) {
     if (e.message === 'AUTH_EXPIRED') return;
+    // 同上：清掉旧日期的列表，避免新日期下显示上一天的内容
+    state.deptLogs = [];
+    state.deptSubmitted = false;
+    state.deptLogKey = '';
+    renderReadPane();
     setNotice('dept', 'error', '读取部门日志失败：' + e.message);
   }
 }
@@ -1959,6 +2303,7 @@ async function refresh() {
 async function bootstrap() {
   state.date = state.date || todayStr();
   $('dateInput').value = state.date;
+  pruneStorage('', false);   // 启动只回收过期键：近 7 天的缓存必须留着给断网回退用
   await loadDepts();
   await refresh();
 }
@@ -2022,7 +2367,9 @@ $('addSlotBtn').addEventListener('click', function () {
   else if (last && last.endTime < '18:00') next = { startTime: '18:00', endTime: '20:00' };
 
   if (hasOverlap(slots, next, -1)) {
+    // 冲突就不再加：以前提示完仍旧 push，会留下一条交叉时段，直到提交校验才报错
     toast('新增时间段与现有时间段冲突，请手动调整');
+    return;
   }
   slots.push(next);
   renderSlots();
@@ -2092,19 +2439,23 @@ $('shotClose').addEventListener('click', closeShotPreview);
   function apply() { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
   function reset() { scale = 1; tx = 0; ty = 0; apply(); }
   function dist(a, b) { return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
+  var lbGen = 0;   // 打开序号：关闭/重开后，迟到的编码结果不得再写 src
   function openLb() {
     if (!lb.hidden) return;
     reset();
-    // 优先复用绘制缓存的 Blob（objectURL），避免大图再做一次 toDataURL 编码
-    if (shotBlobCache) {
-      if (shotObjectUrl) URL.revokeObjectURL(shotObjectUrl);
-      shotObjectUrl = URL.createObjectURL(shotBlobCache);
-      img.src = shotObjectUrl;
-    } else {
-      img.src = canvas.toDataURL('image/png');
-    }
     lb.hidden = false;
     try { $('lightboxClose').focus({ preventScroll: true }); } catch (e) { $('lightboxClose').focus(); }
+    var gen = ++lbGen;
+    // 统一走 Blob（objectURL）：http 下 configureShotCopyBtn 早退不预热缓存，
+    // 走 toDataURL 会每次放大都在主线程同步编码一张 1130×N 的 PNG，并把 base64 串挂进 src。
+    // 首次编码不可避免（异步、不阻塞点击），结果进 shotBlobCache，之后再放大直接复用。
+    withShotBlob(canvas, function (blob) {
+      if (gen !== lbGen || lb.hidden) return;
+      if (!blob) { toast('截图生成失败'); return; }
+      if (shotObjectUrl) URL.revokeObjectURL(shotObjectUrl);
+      shotObjectUrl = URL.createObjectURL(blob);
+      img.src = shotObjectUrl;
+    });
   }
 
   img.addEventListener('touchstart', function (e) {
@@ -2167,12 +2518,58 @@ $('shotClose').addEventListener('click', closeShotPreview);
 $('shotCopy').addEventListener('click', onShotCopyClick);
 $('shotDownload').addEventListener('click', function () { downloadShot($('shotCanvas')); });
 
+/* 粘顶元素（标签页）要钉在顶栏下方，偏移必须按真实高度算：
+   顶栏含 env(safe-area-inset-top)，硬编码在刘海屏上会留缝或压住 */
+function syncStickyOffsets() {
+  var root = document.documentElement.style;
+  var top = document.querySelector('.topbar');
+  if (top && top.offsetHeight) root.setProperty('--topbar-h', top.offsetHeight + 'px');
+  syncReadLayout();
+}
+
+/* 部门日志改成「头部卡 + 列表卡内滚」后，paneRead 必须有确定高度，否则 flex 列表卡没有可分配空间。
+   高度 = 视口 - 顶栏 - 标签页(含其下外边距) - main 上下内边距；键盘弹起/地址栏收起都用同一口径重算 */
+function syncReadLayout() {
+  var pane = $('paneRead');
+  if (!pane) return;
+  var top = document.querySelector('.topbar');
+  var tabs = document.querySelector('.tabs');
+  var mainEl = document.querySelector('main');
+  if (!mainEl) return;
+  var mainCS = getComputedStyle(mainEl);
+  // .tabs 的 margin-top:-6px 已抵消 main 的 padding-top:6px，且 tabs.offsetHeight 含其
+  // 自身 padding-top:6px；再减 padTop 会让 --read-h 少 6px（底部留一条灰缝），故只算 padBottom
+  var padBottom = parseFloat(mainCS.paddingBottom) || 0;
+  var tabsMB = tabs ? (parseFloat(getComputedStyle(tabs).marginBottom) || 0) : 0;
+  var avail = window.innerHeight
+    - (top ? top.offsetHeight : 0)
+    - (tabs ? tabs.offsetHeight : 0)
+    - tabsMB - padBottom;
+  pane.style.setProperty('--read-h', Math.max(280, Math.round(avail)) + 'px');
+}
+/* resize / visualViewport.resize 在地址栏收放、键盘动画期会逐帧触发，而 syncStickyOffsets
+   内部有 getComputedStyle + 多次 offsetHeight 的强制布局，用 rAF 合并成每帧最多一次 */
+var stickySyncRaf = 0;
+function scheduleSyncSticky() {
+  if (stickySyncRaf) return;
+  stickySyncRaf = requestAnimationFrame(function () { stickySyncRaf = 0; syncStickyOffsets(); });
+}
+window.addEventListener('resize', scheduleSyncSticky);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleSyncSticky);
+
 function switchTab(tab) {
   state.tab = tab;
   $('tabWriteBtn').setAttribute('aria-selected', tab === 'write' ? 'true' : 'false');
   $('tabReadBtn').setAttribute('aria-selected', tab === 'read' ? 'true' : 'false');
   $('paneWrite').hidden = tab !== 'write';
   $('paneRead').hidden = tab !== 'read';
+  // 部门日志是「整屏固定 + 列表卡内滚」，底部留白要跟着收窄（先改标记再量高度）
+  document.body.classList.toggle('read-mode', tab === 'read');
+  // 日期/部门筛选行跟着当前视图走（同一个节点复用，避免两份控件与两份状态）
+  var bar = $('filtersBar');
+  var card = document.querySelector(tab === 'write' ? '#paneWrite .card' : '#paneRead .read-head');
+  if (card && bar.parentNode !== card) card.insertBefore(bar, card.firstChild);
+  syncStickyOffsets();
   if (tab === 'read' && !state.auth) return;
   if (tab === 'read' && state.deptLogKey !== (state.date + '|' + (state.viewDeptId || 'all'))) {
     loadDeptLogs().catch(function (e) {
