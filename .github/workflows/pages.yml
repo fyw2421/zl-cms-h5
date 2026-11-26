@@ -88,21 +88,22 @@ jobs:
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
 
       # 冒烟校验：Deploy 绿不等于线上是新版（CDN 会继续发旧包）。拉线上页面，等到 build 标记
-      # 与本次短 SHA 一致；约 3 分钟仍不一致就判红，避免「显示成功、站点还是旧版」的假绿。
+      # 与本次短 SHA 一致；约 7.5 分钟仍不一致才判红，避免把「CDN 慢」误判成假绿/失败。
       - name: Smoke check
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           set -uo pipefail
           SHA=$(echo "$GITHUB_SHA" | cut -c1-12)
-          for i in $(seq 1 18); do
+          for i in $(seq 1 30); do
             body=$(curl -fsS "${PAGE_URL}?cb=${RANDOM}${i}" 2>/dev/null || true)
+            live=$(printf '%s' "$body" | grep -oE 'name="build" content="[^"]*"' | head -n1)
             if printf '%s' "$body" | grep -Fq "<meta name=\"build\" content=\"${SHA}\">"; then
-              echo "live build matches ${SHA}"
+              echo "线上已是本次版本（第 ${i} 次命中）：${live}"
               exit 0
             fi
-            echo "attempt ${i}: live page still not on ${SHA}"
-            sleep 10
+            echo "第 ${i} 次：线上 ${live:-没有 build 标记}，期望 ${SHA}"
+            sleep 15
           done
-          echo "::error::live page never served build ${SHA} — Pages 可能仍在发旧包"
+          echo "::error::7.5 分钟内线上仍未切到 ${SHA} —— 查 Pages CDN 是否仍发旧包"
           exit 1
