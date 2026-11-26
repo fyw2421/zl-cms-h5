@@ -87,23 +87,35 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
 
-      # 冒烟校验：Deploy 绿不等于线上是新版（CDN 会继续发旧包）。拉线上页面，等到 build 标记
-      # 与本次短 SHA 一致；约 7.5 分钟仍不一致才判红，避免把「CDN 慢」误判成假绿/失败。
+      # 冒烟校验：Deploy 绿不等于线上是新版。GitHub Pages 的 HTML 带 cache-control: max-age=600（Fastly，
+      # 缓存 10 分钟），所以新页面最长 10 分钟内对外仍是旧内容 —— 窗口给到 12 分钟，配合 ?cb= 破本地缓存。
+      # PAGE_URL 为空时按 Pages 默认地址兜底；每轮打印 HTTP 状态与字节数，失败时能区分「拉不到」与「旧内容」。
       - name: Smoke check
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           set -uo pipefail
           SHA=$(echo "$GITHUB_SHA" | cut -c1-12)
-          for i in $(seq 1 30); do
-            body=$(curl -fsS "${PAGE_URL}?cb=${RANDOM}${i}" 2>/dev/null || true)
-            live=$(printf '%s' "$body" | grep -oE 'name="build" content="[^"]*"' | head -n1)
-            if printf '%s' "$body" | grep -Fq "<meta name=\"build\" content=\"${SHA}\">"; then
+          TARGET="${PAGE_URL:-}"
+          if [ -z "$TARGET" ]; then
+            TARGET="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          fi
+          echo "target=${TARGET}"
+          for i in $(seq 1 36); do
+            code=$(curl -sS -o /tmp/page.html -w '%{http_code}' \
+              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "${TARGET}?cb=${RANDOM}${i}" 2>/tmp/curl.err)
+            bytes=$(wc -c < /tmp/page.html | tr -d ' ')
+            live=$(grep -oE 'name="build" content="[^"]*"' /tmp/page.html 2>/dev/null | head -n1)
+            if grep -Fq "<meta name=\"build\" content=\"${SHA}\">" /tmp/page.html 2>/dev/null; then
               echo "线上已是本次版本（第 ${i} 次命中）：${live}"
               exit 0
             fi
-            echo "第 ${i} 次：线上 ${live:-没有 build 标记}，期望 ${SHA}"
-            sleep 15
+            echo "第 ${i} 次：http=${code} bytes=${bytes} 线上 ${live:-没有 build 标记}，期望 ${SHA}"
+            if [ "$code" != "200" ]; then
+              echo "  curl: $(cat /tmp/curl.err 2>/dev/null)"
+            fi
+            sleep 20
           done
-          echo "::error::7.5 分钟内线上仍未切到 ${SHA} —— 查 Pages CDN 是否仍发旧包"
+          echo "::error::12 分钟内线上仍未切到 ${SHA} —— 查 Pages 是否部署失败或仍发旧包"
           exit 1
