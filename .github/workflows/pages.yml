@@ -62,6 +62,27 @@ jobs:
           name: github-pages
           path: _site
 
+      # deploy-pages 会去 Actions API 列本次 run 的 artifact；刚上传完的一两秒内元数据可能还没传播开，
+      # 表现就是 "No artifacts named "github-pages" were found"。这里用同一个 token 先确认能列出它，
+      # 等不到就给出可读原因（权限缺失 / artifact 名不对），而不是让 Deploy 吐那句误导性报错。
+      - name: Wait for artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 12); do
+            if curl -fsS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+              | grep -Eq '"name": *"github-pages"'; then
+              echo "artifact github-pages 已可列出（第 ${i} 次）"
+              exit 0
+            fi
+            echo "第 ${i} 次：artifact 仍未列出，等 5s"
+            sleep 5
+          done
+          echo "::error::60s 内仍列不到 artifact github-pages —— 查 permissions 是否含 actions: read、artifact 名是否被改"
+          exit 1
+
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
