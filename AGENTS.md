@@ -57,7 +57,7 @@ git push origin develop
 1. 先看该 run 的 **Annotations**，别直接重推。
 2. 报 `No artifacts named "github-pages" were found for this workflow run` → 查 `permissions` 是否含 `actions: read`（缺它时 `deploy-pages` 读不到 artifact 元数据），再查 artifact 名是否为 `github-pages`。
 3. 报 workflow 语法/未知输入 → 先看 `Lint workflows`（actionlint）那一步的输出。
-4. 报 `Smoke check` 红 → 部署成功但线上仍是旧包，多为 CDN 未刷；重跑一次即可，不要改页面内容。
+4. 报 `Smoke check` 红 → `Deploy` 已成功，只是线上 `build` 标记在 7.5 分钟内没切到本次 SHA（CDN 慢）。先手动刷 `https://fyw2421.github.io/zl-cms-h5/?t=<随机>` 看标记，若已是新 SHA 就是假红，重跑即可；若仍是旧 SHA 才需要查 Pages。
 5. 确认是 GitHub 平台故障（`githubstatus.com` 有对应 incident）→ 等恢复后重跑。
 
 **重试用 `scripts/deploy-retry.ps1`，不要往 `main` 推空提交**（那样会永久写进发布历史）：
