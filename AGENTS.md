@@ -50,8 +50,28 @@ git push origin develop
 
 **tag 格式**：`vX.Y.Z`，附注 tag。首个是 `v1.0.0`。
 
+## 部署失败排查
+
+`.github/workflows/pages.yml` 的 action 已**钉到 commit SHA**（注释里留版本号），失败面收敛到权限/配置/平台三类。`Deploy` 步骤红时按顺序查：
+
+1. 先看该 run 的 **Annotations**，别直接重推。
+2. 报 `No artifacts named "github-pages" were found for this workflow run` → 查 `permissions` 是否含 `actions: read`（缺它时 `deploy-pages` 读不到 artifact 元数据），再查 artifact 名是否为 `github-pages`。
+3. 报 workflow 语法/未知输入 → 先看 `Lint workflows`（actionlint）那一步的输出。
+4. 报 `Smoke check` 红 → 部署成功但线上仍是旧包，多为 CDN 未刷；重跑一次即可，不要改页面内容。
+5. 确认是 GitHub 平台故障（`githubstatus.com` 有对应 incident）→ 等恢复后重跑。
+
+**重试用 `scripts/deploy-retry.ps1`，不要往 `main` 推空提交**（那样会永久写进发布历史）：
+
+```powershell
+$env:GITHUB_TOKEN = 'ghp_...'        # classic token，勾 repo（Actions read & write）
+pwsh -File scripts/deploy-retry.ps1 -List 5      # 先看最近几次
+pwsh -File scripts/deploy-retry.ps1 -Latest     # 重跑最新一次
+```
+
+`workflow_dispatch` 也在，Actions 页面点 `Re-run all jobs` 等价。
+
 ## 发布物范围
 
 - 提交里只放交付物 `zl-worklog.html` 与仓库文档/脚本。
 - `reference/`（PC 端参考源）与 `_backup/`（修订前快照）**一律不入库**，已在 `.gitignore`；不要 `git add -f` 强加。
-- 推送 `main` 会触发 `.github/workflows/pages.yml` 发布到 GitHub Pages（前提：仓库 Settings → Pages 的 Source 已设为 `GitHub Actions`）。该 workflow 只把 `zl-worklog.html` 复制成 `index.html` 上传，不要把其他文件或目录加进 `_site`。
+- 推送 `main` 会触发 `.github/workflows/pages.yml` 发布到 GitHub Pages（前提：仓库 Settings → Pages 的 Source 已设为 `GitHub Actions`）。该 workflow 只把 `zl-worklog.html` 复制成 `index.html` 上传，并把 head 里的 `<meta name="build" content="local">` 换成本次提交短 SHA（部署后冒烟校验按它判线上版本）；不要把其他文件或目录加进 `_site`。

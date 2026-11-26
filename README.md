@@ -61,7 +61,9 @@ http://192.168.0.62:8000/zl-worklog.html
 ## 发布与部署（GitHub Pages）
 
 - 部署方式：**GitHub Actions**（`.github/workflows/pages.yml`），只在 `push main` 或手动触发时运行；
-- 产物：workflow 只把 `zl-worklog.html` 复制成 `_site/index.html` 上传，`reference/`、`scripts/`、文档都不会被发布；
+- 产物：workflow 把 `zl-worklog.html` 复制成 `_site/index.html` 上传，并把 head 里的 `<meta name="build" content="local">` 换成本次提交短 SHA；`reference/`、`scripts/`、文档都不会被发布；
+- 流水线自检：所有 action 钉到 commit SHA（防上游改行为）、`actionlint` 检查 workflow 本身、部署后用冒烟校验拉线上页面比对 `build` 标记（防止「部署显示成功、站点仍是旧包」的假绿）；
+- 部署红了用 `scripts/deploy-retry.ps1` 重跑（`-List 5` 看最近几次、`-Latest` 重跑最新一次，需要 `GITHUB_TOKEN`），不要往 `main` 推空提交；
 - 访问地址：`https://fyw2421.github.io/zl-cms-h5/`（根路径即页面，无需带文件名）；
 - 前提：仓库 Settings → Pages → **Source 必须选 `GitHub Actions`**（不是 Deploy from a branch），否则部署步骤会因「Pages 站点未启用」失败。
 
@@ -126,7 +128,8 @@ zl-cms-h5/
 ├─ .github/workflows/
 │  └─ pages.yml              # 发布到 GitHub Pages 的工作流
 ├─ scripts/
-│  └─ ensure-proxy.ps1       # 联网操作（push/pull）前的代理检查
+│  ├─ ensure-proxy.ps1       # 联网操作（push/pull）前的代理检查
+│  └─ deploy-retry.ps1       # 重跑 Pages 部署（替代推空提交的重试方式）
 ├─ reference/                # PC 端只读参考源，勿改；仅在本地，不入库
 │  ├─ bundle.js              # 生产包：接口路径、axios 配置
 │  └─ worklog_component.js   # 组件源码：字段与表单规则
