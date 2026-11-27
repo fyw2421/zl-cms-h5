@@ -319,13 +319,15 @@ body.login-mode main{
 
 /* ---------- 日志列表 ---------- */
 /* 紧凑版：条目间距交给 gap（原为 gap10 + margin16 = 26），不再叠双份外距
-   时段块并入头部行（放工时前面），宽度不够时 flex-wrap 自动折行，不挤压也不溢出 */
+   列表固定三段：① 姓名 + 状态胶囊 ② 时段 + 工时 ③ 工作内容，各占一行，
+   不再由 flex-wrap 随屏宽随机折行（手机上时段和工时会被拆散，不美观） */
 .log-list{display:flex;flex-direction:column;gap:8px}
 .log-item{border-left:3px solid var(--brand);padding:6px 12px 8px;margin-bottom:0;border-bottom:1px solid var(--line);border-radius:0 10px 10px 0}
 .log-item.mine{border-left-color:var(--brand)}
 .log-item.leave{border-left-color:var(--warn)}
 .log-item.pending{border-left-color:var(--danger);background:var(--danger-bg);border-radius:0 10px 10px 0}
-.log-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.log-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.log-meta{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .nm{font-size:14px;font-weight:600;color:#182026}
 .badge{
   font-size:11px;padding:2px 6px;border-radius:5px;background:#0e7490;color:#fff;font-weight:400;
@@ -344,8 +346,8 @@ body.login-mode main{
 .log-content.empty{color:var(--ph);font-style:normal}
 .log-content.pending{color:var(--danger);font-weight:500}
 .hours.pending{color:var(--danger)}
-/* 时段：头部行内的小胶囊，不再单独占一行（margin-top 归零） */
-.log-slots{margin:0;font-size:12px;color:#78838c;display:flex;flex-wrap:wrap;gap:6px;flex:0 0 auto}
+/* 时段：第二行的小胶囊，与工时同排；多个时段仍可在此行内折行 */
+.log-slots{margin:0;font-size:12px;color:#78838c;display:flex;flex-wrap:wrap;gap:6px;flex:0 1 auto;min-width:0}
 .log-slots span{padding:1px 6px;border-radius:5px;background:#f0f3f5;white-space:nowrap}
 
 /* ---------- 提示 ---------- */
@@ -625,7 +627,7 @@ body.login-mode main{
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tipsTitle">
     <h3 id="tipsTitle">关于本系统</h3>
     <div class="tip-row"><span class="tip-no">1</span><span>非官网出品，仅供内部交流使用</span></div>
-    <div class="tip-row"><span class="tip-no">2</span><span>登录成功后凭证仅保存在本机浏览器，不会上传到其他位置；连续 3 天未使用将自动清除，需重新登录。</span></div>
+    <div class="tip-row"><span class="tip-no">2</span><span>登录成功后凭证仅保存在本机浏览器，不会上传到其他位置；连续 4 天未使用将自动清除，需重新登录。</span></div>
     <div class="modal-btns" style="margin-top:18px"><button class="ok" id="tipsClose" type="button">我知道了</button></div>
   </div>
 </div>
@@ -684,7 +686,7 @@ var API_TIMEOUT_MS = 60000;
 var LOG_PAGE_SIZE = 10000;
 var STORE_AUTH = 'lw_h5_auth_v1';
 var STORE_LAST_SEEN = 'lw_h5_last_seen_v1';
-var IDLE_LIMIT_MS = 3 * 24 * 60 * 60 * 1000; // 闲置 3 天未使用即作废，需重新登录
+var IDLE_LIMIT_MS = 4 * 24 * 60 * 60 * 1000; // 闲置 4 天未使用即作废，需重新登录
 var CACHE_PREFIX = 'lw_h5_cache_';
 var DRAFT_PREFIX = 'lw_h5_draft_';   // 未提交草稿（按 用户|日期|提交部门 隔离）
 var STORE_VIEW = 'lw_h5_view_v1';    // 视图状态：日期 / 标签页 / 查看部门（刷新后恢复用户所选）
@@ -1006,7 +1008,7 @@ async function api(method, path, opts) {
   var headers = { 'Content-Type': 'application/json;charset=UTF-8' };
   if (state.auth && state.auth.token) {
     if (isIdleExpired()) {
-      handleExpired('登录状态已超过 3 天未使用，请重新登录');
+      handleExpired('登录状态已超过 4 天未使用，请重新登录');
       throw new Error('AUTH_EXPIRED');
     }
     headers['Authorization'] = 'Bearer ' + state.auth.token;
@@ -1068,7 +1070,7 @@ async function api(method, path, opts) {
 }
 
 /* ---------- 登录态 ---------- */
-/* 有效期由服务端判定；本地额外加「闲置 3 天」兜底，避免凭证永久驻留 */
+/* 有效期由服务端判定；本地额外加「闲置 4 天」兜底，避免凭证永久驻留 */
 var lastSeenWriteTs = 0;
 var idleExpired = false; // 启动时因闲置超期被清掉的标记，用于登录页提示
 
@@ -2007,7 +2009,9 @@ function renderReadPane() {
     } else {
       html.push('<span class="chip ' + status + '">' + esc(STATUS_LABEL[status]) + '</span>');
     }
-    // 时段胶囊放在工时之前：常态与头部同一行，宽度不够时由 flex-wrap 折到下一行
+    html.push('</div>');
+    // 第二行固定放时段 + 工时：不再随屏宽和姓名长短随机折行
+    html.push('<div class="log-meta">');
     if (slots) html.push('<span class="log-slots">' + slots + '</span>');
     html.push('<span class="hours' + (pending ? ' pending' : '') + '">' + (pending ? '—' : (row.workHours == null ? '—' : esc(row.workHours) + ' 小时')) + '</span>');
     html.push('</div>');
@@ -3005,7 +3009,7 @@ document.addEventListener('visibilitychange', function () {
   renderAuthState();
 
   if (!state.auth && idleExpired) {
-    loginError('登录状态已超过 3 天未使用，为安全起见已清除，请重新登录');
+    loginError('登录状态已超过 4 天未使用，为安全起见已清除，请重新登录');
   }
 
   if (state.auth) {
