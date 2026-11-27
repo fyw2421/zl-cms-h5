@@ -711,6 +711,10 @@ var state = {
   },
   myLog: null,
   pendingDraft: null,  // 已提交日志上的未提交草稿 {form, at}：不自动回填，等用户「取回草稿 / 丢弃」
+  // 切日期/提交部门后、新维度读到服务端之前：表单仍是旧维度内容，此时按「当前维度」
+  // 落盘会把旧内容写进新日期/新部门的草稿键。此窗口内禁止落盘，切换前已按旧维度 flush。
+  dimensionLoading: false,
+  dimensionSeq: 0,     // 切换代次：旧请求的 finally 不得清掉新请求正在用的加载标志
   deptLogs: [],
   deptSubmitted: false,   // 当前查看部门当日是否已提交部门日志
   myDeptSubmitted: null,  // 「我的日志」里提交部门当日是否已提交部门日志：null = 未知（未选部门/未读到）
@@ -800,6 +804,22 @@ function clearNotice(keys) {
     (Array.isArray(keys) ? keys : [keys]).forEach(function (k) { delete notices[k]; });
   }
   renderNotices();
+}
+/* 网络类故障用一个统一槽概括：离线时部门列表/我的日志/部门日志会同时失败，
+   三个槽各弹一条「网络连接失败」很吵。业务错误、权限错误仍走各自的分槽，
+   只把「连不上后端」这一种合并；任一读请求成功即清 net，恢复后提示自动消失。 */
+var NET_MSG = '网络不可用，部分数据仅显示本机缓存，仅供查看；请联网刷新后重试。';
+function isNetworkError(e) {
+  var m = (e && e.message) || '';
+  return m.indexOf('网络连接失败') >= 0 || m.indexOf('请求超时') >= 0;
+}
+function setNetNotice() {
+  ['depts', 'my', 'dept', 'offline'].forEach(function (k) { delete notices[k]; });
+  notices.net = { type: 'warn', msg: NET_MSG };
+  renderNotices();
+}
+function clearNetNotice() {
+  if (notices.net) { delete notices.net; renderNotices(); }
 }
 function renderNotices() {
   var keys = Object.keys(notices);
@@ -965,34 +985,48 @@ async function api(method, path, opts) {
     touchSeen();
   }
 
-  // 超时上限：AbortController 可用时 60 秒无响应即中止，让调用方拿到确定的失败并复位按钮
+  // 超时上限：AbortController 可用时中止请求；不可用（旧版 iOS Safari 等）时仍要
+  // 用 Promise.race 兜底 reject，否则 timer 没人消费，请求永远 pending、busy 锁与
+  // 「提交中…」按钮一直挂着。两条路径都保证调用方拿到确定的失败并复位按钮。
   var timedOut = false;
   var timer = null;
   var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-  if (ctrl) {
-    timer = setTimeout(function () { timedOut = true; ctrl.abort(); }, API_TIMEOUT_MS);
-  }
+  var timeoutReject = null;
+  var timeoutPromise = new Promise(function (_, reject) { timeoutReject = reject; });
+  timer = setTimeout(function () {
+    timedOut = true;
+    if (ctrl) ctrl.abort();
+    timeoutReject(new Error('请求超时（' + (API_TIMEOUT_MS / 1000) + ' 秒无响应），请检查网络后重试'));
+  }, API_TIMEOUT_MS);
 
+  function timeoutError() {
+    return new Error('请求超时（' + (API_TIMEOUT_MS / 1000) + ' 秒无响应），请检查网络后重试');
+  }
   var resp;
   try {
-    resp = await fetch(url, {
-      method: method.toUpperCase(),
-      headers: headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-      cache: 'no-store',
-      signal: ctrl ? ctrl.signal : undefined
-    });
+    resp = await Promise.race([
+      fetch(url, {
+        method: method.toUpperCase(),
+        headers: headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        cache: 'no-store',
+        signal: ctrl ? ctrl.signal : undefined
+      }),
+      timeoutPromise
+    ]);
   } catch (e) {
-    throw new Error(timedOut
-      ? '请求超时（' + (API_TIMEOUT_MS / 1000) + ' 秒无响应），请检查网络后重试'
-      : '网络连接失败，请检查网络后重试');
-  } finally {
-    if (timer) clearTimeout(timer);
+    throw timedOut ? timeoutError() : new Error('网络连接失败，请检查网络后重试');
   }
 
+  // body 阶段同样要在超时窗口内：服务端先发响应头再挂住 body 时，resp.json() 会
+  // 永远 pending，timer 不能在这里之前清掉。解析失败仍是解析失败，不冒充超时。
   var data = null;
-  try { data = await resp.json(); } catch (e) {
-    throw new Error('接口返回无法解析（HTTP ' + resp.status + '）');
+  try {
+    data = await Promise.race([resp.json(), timeoutPromise]);
+  } catch (e) {
+    throw timedOut ? timeoutError() : new Error('接口返回无法解析（HTTP ' + resp.status + '）');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   if (resp.status === 401 || (data && data.code === -2)) {
@@ -1134,6 +1168,7 @@ function doLogout() {
   state.deptSubmitted = false;
   state.myDeptSubmitted = null;
   state.pendingDraft = null;
+  state.dimensionLoading = false;
   state.form = { workStatus: 'normal', workContent: '', workTimeSlots: [] };
   renderAuthState();
   $('username').value = '';
@@ -1149,17 +1184,21 @@ async function loadDepts() {
       state.depts = r.data.map(function (d) {
         return { id: String(d.id), deptName: d.deptName || '未知部门' };
       });
-      clearNotice('depts');
+      clearNotice(['depts', 'net']);   // 读成功：网络已恢复，统一离线提示可撤
     } else {
-      // 接口通了但没给出列表：保留上一次的列表，同时把原因说出来，不让它变成静默失败
+      // 接口通了但没给出列表（业务异常）：保留上一次的列表并说明原因，不并入网络提示
       setNotice('depts', 'warn', '部门列表读取异常' + (r && r.msg ? '：' + r.msg : '') + '，当前显示的可能不是最新部门。');
     }
   } catch (e) {
     if (e.message === 'AUTH_EXPIRED') throw e;
     state.depts = [];
-    // 不再静默：未绑定部门的账号拿不到列表就选不到提交部门（按钮会一直置灰），
-    // 只留一句「尚未选择提交部门」会把网络问题说成操作问题
-    setNotice('depts', 'error', '部门列表读取失败：' + e.message + '；未绑定部门的账号暂时无法提交日志，请刷新重试。');
+    if (isNetworkError(e)) {
+      setNetNotice();
+    } else {
+      // 非网络失败（如接口报错）：未绑定部门的账号拿不到列表就选不到提交部门，
+      // 只留一句「尚未选择提交部门」会把接口问题说成操作问题
+      setNotice('depts', 'error', '部门列表读取失败：' + e.message + '；未绑定部门的账号暂时无法提交日志，请刷新重试。');
+    }
   }
   if (state.auth && !state.auth.deptId && !state.submitDeptId && state.depts.length) {
     state.submitDeptId = state.depts[0].id;
@@ -1227,6 +1266,30 @@ function writeCacheJson(date, deptId, json) {
 function writeCache(date, deptId, rows) {
   writeCacheJson(date, deptId, JSON.stringify(rows));
 }
+/* pageSize=1e4 后整表 JSON 可达 3MB+，超过 2MB 预算：两个键都写整表时，
+   第二个键的 pruneStorage 会把刚写的 mine_ 键裁掉，断网回落静默失效。
+   大响应按用途降级：
+   - mineOnly=true（我的日志键）：只留当前用户那行，并把「部门当日是否已提交」
+     折叠进该行，断网仍能恢复我的日志与锁定态；
+   - 部门视图键：整表不缓存，断网时明确报读取失败，不写空表冒充「当日暂无日志」。
+   小响应（≤预算）仍走原整表双键，断网回退能力不变。 */
+function writeLogCache(date, deptId, rows, json, mineOnly) {
+  var s = json || JSON.stringify(rows);
+  if (s.length <= STORE_BUDGET_CHARS) {
+    writeCacheJson(date, deptId, s);
+    return;
+  }
+  if (!mineOnly) return;   // 部门视图：超预算不缓存，明确失败优于空表
+  var me = (state.auth && state.auth.userId) ? String(state.auth.userId) : '';
+  var list = Array.isArray(rows) ? rows : [];
+  var row = list.filter(function (r) { return String(r.userId) === me; })[0];
+  if (!row) return;        // 当天没有我的记录：不写合成行，让提交按钮按「未读到」置灰
+  var deptSubmitted = list.some(function (r) { return Number(r.isDeptSubmit) === 1; });
+  var compact = {};
+  Object.keys(row).forEach(function (k) { compact[k] = row[k]; });
+  compact.isDeptSubmit = deptSubmitted ? 1 : 0;
+  writeCacheJson(date, deptId, JSON.stringify([compact]));
+}
 
 async function fetchLogs(date, deptId) {
   var r = await api('get', '/Worklog/GetWorklogs', {
@@ -1267,7 +1330,7 @@ async function loadMyLog() {
   var reqDate = state.date;
   var rows = await fetchLogs(reqDate, myDeptId);
   var json = JSON.stringify(rows);   // 部门视图同参数时直接复用，省一次序列化
-  writeCacheJson(reqDate, 'mine_' + myDeptId, json);
+  writeLogCache(reqDate, 'mine_' + myDeptId, rows, json, true);
   if (state.date !== reqDate || resolveSubmitDeptId() !== myDeptId) return null;  // 已切换，丢弃迟到结果
   state.myLog = rows.filter(function (r) {
     return String(r.userId) === String(state.auth.userId);
@@ -1276,6 +1339,7 @@ async function loadMyLog() {
   // 不需要再多打一次 ConfirmDeptWorklogSubmit
   state.myDeptSubmitted = rows.some(function (r) { return Number(r.isDeptSubmit) === 1; });
   state.myLogLoadedKey = reqDate + '|' + myDeptId;
+  clearNetNotice();   // 读成功即恢复在线，统一离线提示可以撤掉
   applyMyLogToForm();
   return { date: reqDate, deptId: myDeptId, rows: rows, json: json };
 }
@@ -1298,7 +1362,8 @@ async function loadDeptLogs() {
   var offline = false;
   try {
     var rows = await fetchLogs(reqDate, deptId);
-    writeCache(reqDate, deptId, rows);
+    writeLogCache(reqDate, deptId, rows, null, false);
+    clearNetNotice();   // 部门日志读成功：恢复在线
     if (state.date !== reqDate || state.viewDeptId !== deptId) return;
   } catch (e) {
     if (e.message === 'AUTH_EXPIRED') throw e;
@@ -1307,6 +1372,7 @@ async function loadDeptLogs() {
     if (state.date !== reqDate || state.viewDeptId !== deptId) return;
     rows = cached;
     offline = true;
+    setNetNotice();   // 部门日志走缓存，也是连不上后端，并入统一离线提示
   }
   offlineNotice = offline;
   applyDeptRows(rows, reqDate, deptId);
@@ -1429,6 +1495,13 @@ function writeDraft() {
 function flushDraft() {
   if (!state.auth) return;
   clearTimeout(draftTimer);
+  // 维度切换中：切日期/部门前已按旧维度落盘，此刻表单是新维度的初始态、服务端还没回来。
+  // 窗口期不能直接按当前维度写/删——会把旧内容认成新日期的草稿，或删掉新日期真实存在的草稿。
+  // 只有用户在加载窗口内真正改过表单（相对初始态为脏）才落盘到新维度。
+  if (state.dimensionLoading) {
+    if (draftDirty(state.form, null)) persistDraft();
+    return;
+  }
   // 已锁定（部门日志已提交）：表单不该再有改动，也不能顺手把解除锁定后可能还要用的旧草稿删掉
   if (isDeptLocked()) return;
   // 待取回的草稿此刻不在表单里（表单等于线上内容），不能按「表单与服务端一致」把它删掉
@@ -1870,7 +1943,8 @@ function renderReadPane() {
   // 视图名由标签页承担、人数由统计块「总人数」承担，这里不再重复标题
 
   if (offlineNotice) {
-    setNotice('offline', 'warn', '当前网络不可用，显示的是本机缓存数据，可能不是最新。');
+    // 部门视图走缓存已经是「连不上后端」，并入统一离线提示，不再单弹一条
+    setNetNotice();
   } else {
     clearNotice('offline');
   }
@@ -2470,6 +2544,7 @@ async function refresh() {
   var mine = null;
   try {
     mine = await loadMyLog();
+    clearNetNotice();   // 我的日志读成功：恢复在线，撤掉统一离线提示
   } catch (e) {
     if (e.message === 'AUTH_EXPIRED') return;
     var myDeptId = resolveSubmitDeptId();
@@ -2478,16 +2553,25 @@ async function refresh() {
       state.myLog = cached.filter(function (r) {
         return String(r.userId) === String(state.auth.userId);
       })[0] || null;
-      state.myLogLoadedKey = myLogKey();
-      state.myDeptSubmitted = Array.isArray(cached) && cached.some(function (r) { return Number(r.isDeptSubmit) === 1; });
+      // 缓存只是本机旧快照，不是「已成功读到服务端」：不写 myLogLoadedKey，
+      // 提交按钮因此保持置灰，胶囊也按未就绪隐藏，避免用旧快照覆盖线上较新的记录。
+      // myDeptSubmitted 同理置 null（未知），不拿缓存里的旧标记下锁定结论。
+      state.myLogLoadedKey = '';
+      state.myDeptSubmitted = null;
       applyMyLogToForm();
-      setNotice('my', 'warn', '网络不可用，当前显示本机缓存的「我的日志」，提交前请确认内容。');
+      // 离线态提交按钮置灰，「取回草稿」会是个点了也提交不了的假入口：
+      // 只收起提示条，localStorage 里的草稿不动，联网刷新后仍会按正常规则恢复。
+      state.pendingDraft = null;
+      renderDraftBar();
+      setNetNotice();   // 缓存回落也是「连不上后端」，并入统一离线提示
     } else {
       // 没缓存又读失败：必须清掉上一天的记录，否则表单会留着旧内容、按钮还能提交
       state.myLog = null;
       state.myLogLoadedKey = '';
+      state.myDeptSubmitted = null;   // 加载判据已清，锁定判据也要清，不能留着上一天的快照
       applyMyLogToForm();   // 按新维度重算表单（有本机草稿则恢复，否则回到初始态）
-      setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
+      if (isNetworkError(e)) setNetNotice();
+      else setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
     }
   }
 
@@ -2495,7 +2579,7 @@ async function refresh() {
     // 绑定部门账号下 viewDeptId 与提交部门是同一个，GetWorklogs 的 date/deptId/page/pageSize
     // 完全一致：直接复用「我的日志」那次结果，省掉一次整表请求 + 一次解析 + 一次序列化
     if (mine && mine.date === state.date && mine.deptId === String(state.viewDeptId || '')) {
-      writeCacheJson(mine.date, mine.deptId, mine.json);
+      writeLogCache(mine.date, mine.deptId, mine.rows, mine.json, false);
       offlineNotice = false;
       applyDeptRows(mine.rows, mine.date, mine.deptId);
     } else {
@@ -2508,7 +2592,8 @@ async function refresh() {
     state.deptSubmitted = false;
     state.deptLogKey = '';
     renderReadPane();
-    setNotice('dept', 'error', '读取部门日志失败：' + e.message);
+    if (isNetworkError(e)) setNetNotice();
+    else setNotice('dept', 'error', '读取部门日志失败：' + e.message);
   }
 }
 
@@ -2551,6 +2636,8 @@ $('dateInput').addEventListener('change', function () {
   var v = $('dateInput').value;
   if (!v) { $('dateInput').value = state.date; return; }
   flushDraft();   // 先按旧日期落盘，再切维度，避免 400ms 内的编辑既没进旧键也没进新键
+  var seq = ++state.dimensionSeq;
+  state.dimensionLoading = true;   // 直到新日期读到服务端为止，禁止把旧表单误落成新日期草稿
   state.date = v;
   $('dateText').textContent = v;
   // 换日期等于换维度：先把「已加载」判据清掉再重绘，让提交按钮当场置灰。
@@ -2562,8 +2649,13 @@ $('dateInput').addEventListener('change', function () {
   state.pendingDraft = null;   // 待取回的草稿属于旧日期，换维度时不能留在提示条上
   state.deptLogKey = '';
   state.deptSubmitted = false;
+  blankForm();   // 表单也要回到新日期的初始态，不能留着旧日期的内容
   renderWritePane();
-  refresh();
+  refresh().then(function () {
+    if (seq === state.dimensionSeq) state.dimensionLoading = false;
+  }, function () {
+    if (seq === state.dimensionSeq) state.dimensionLoading = false;
+  });
 });
 
 $('deptSelect').addEventListener('change', function () {
@@ -2571,19 +2663,30 @@ $('deptSelect').addEventListener('change', function () {
   state.viewDeptId = $('deptSelect').value;
   syncDeptLabel();
   loadDeptLogs().catch(function (e) {
-    if (e.message !== 'AUTH_EXPIRED') setNotice('dept', 'error', '读取部门日志失败：' + e.message);
+    if (e.message === 'AUTH_EXPIRED') return;
+    if (isNetworkError(e)) setNetNotice();
+    else setNotice('dept', 'error', '读取部门日志失败：' + e.message);
   });
 });
 
 $('submitDeptSelect').addEventListener('change', function () {
   flushDraft();   // 先按旧提交部门落盘，再切维度
+  var seq = ++state.dimensionSeq;
+  state.dimensionLoading = true;
   state.submitDeptId = $('submitDeptSelect').value;
   state.myLogLoadedKey = '';
+  state.myLog = null;
   state.myDeptSubmitted = null;
   state.pendingDraft = null;
+  blankForm();
   renderWritePane();
-  loadMyLog().catch(function (e) {
-    if (e.message !== 'AUTH_EXPIRED') setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
+  loadMyLog().then(function () {
+    if (seq === state.dimensionSeq) state.dimensionLoading = false;
+  }, function (e) {
+    if (seq === state.dimensionSeq) state.dimensionLoading = false;
+    if (e.message === 'AUTH_EXPIRED') return;
+    if (isNetworkError(e)) setNetNotice();
+    else setNotice('my', 'error', '读取「我的日志」失败：' + e.message);
   });
 });
 
@@ -2639,6 +2742,13 @@ function openEditor() {
   setTimeout(function () { try { $('editorArea').focus(); } catch (e) {} }, 30);
 }
 function closeEditor() {
+  // 编辑器可能在「部门日志提交 in-flight」期间打开：提交成功后 refresh 会把表单锁定，
+  // 此时编辑器还开着。完成按钮必须像主 textarea 一样按锁定态回滚，否则绕过只读并落草稿。
+  if (isDeptLocked()) {
+    cancelEditor();
+    lockedToast();
+    return;
+  }
   $('workContent').value = $('editorArea').value;
   state.form.workContent = $('editorArea').value;
   $('editorOverlay').classList.remove('show');
@@ -2661,6 +2771,12 @@ $('expandBtn').addEventListener('click', openEditor);
 $('editorDone').addEventListener('click', closeEditor);
 $('editorCancel').addEventListener('click', cancelEditor);
 $('editorArea').addEventListener('input', function () {
+  if (isDeptLocked()) {   // 锁定发生在编辑器打开之后：输入要回滚，不能改写表单/落草稿
+    this.value = editorEnterValue;
+    $('editorCount').textContent = this.value.length + ' 字';
+    lockedToast();
+    return;
+  }
   $('editorCount').textContent = this.value.length + ' 字';
   state.form.workContent = this.value;
   writeDraft();
@@ -2825,7 +2941,9 @@ function switchTab(tab) {
   if (tab === 'read' && !state.auth) return;
   if (tab === 'read' && state.deptLogKey !== (state.date + '|' + (state.viewDeptId || 'all'))) {
     loadDeptLogs().catch(function (e) {
-      if (e.message !== 'AUTH_EXPIRED') setNotice('dept', 'error', '读取部门日志失败：' + e.message);
+      if (e.message === 'AUTH_EXPIRED') return;
+      if (isNetworkError(e)) setNetNotice();
+      else setNotice('dept', 'error', '读取部门日志失败：' + e.message);
     });
   }
 }
@@ -2852,7 +2970,9 @@ document.addEventListener('visibilitychange', function () {
 
   if (state.auth) {
     bootstrap().catch(function (e) {
-      if (e.message !== 'AUTH_EXPIRED') setNotice('general', 'error', e.message);
+      if (e.message === 'AUTH_EXPIRED') return;
+      if (isNetworkError(e)) setNetNotice();
+      else setNotice('general', 'error', e.message);
     });
   } else {
     switchTab('write');
