@@ -687,6 +687,34 @@ var STORE_LAST_SEEN = 'lw_h5_last_seen_v1';
 var IDLE_LIMIT_MS = 3 * 24 * 60 * 60 * 1000; // 闲置 3 天未使用即作废，需重新登录
 var CACHE_PREFIX = 'lw_h5_cache_';
 var DRAFT_PREFIX = 'lw_h5_draft_';   // 未提交草稿（按 用户|日期|提交部门 隔离）
+var STORE_VIEW = 'lw_h5_view_v1';    // 视图状态：日期 / 标签页 / 查看部门（刷新后恢复用户所选）
+
+/* 视图状态只存用户主动选过的三项，跟着登录态走：登出即清、闲置过期即失效。
+   不存表单内容（草稿机制已覆盖）、不存提交部门（登录绑定或 loadDepts 自动选）。 */
+function saveViewState() {
+  if (!state.auth) return;
+  safeSet(STORE_VIEW, JSON.stringify({
+    date: state.date,
+    tab: state.tab,
+    viewDeptId: state.viewDeptId || ''
+  }));
+}
+function loadViewState() {
+  var raw = safeGet(STORE_VIEW);
+  if (!raw) return null;
+  var v = null;
+  try { v = JSON.parse(raw); } catch (e) { return null; }
+  if (!v || typeof v !== 'object') return null;
+  // 日期必须是合法 YYYY-MM-DD 且不是未来；防手改存储 / 系统时间回拨带来的怪状态
+  var d = /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : null;
+  if (d && d > todayStr()) d = null;
+  return {
+    date: d,
+    tab: (v.tab === 'write' || v.tab === 'read') ? v.tab : null,
+    viewDeptId: typeof v.viewDeptId === 'string' ? v.viewDeptId : null
+  };
+}
+function purgeViewState() { safeDel(STORE_VIEW); }
 
 var STATUS_LABEL = {
   normal: '正常上班',
@@ -1065,6 +1093,7 @@ function isIdleExpired() {
 function purgeAuth() {
   safeDel(STORE_AUTH);
   safeDel(STORE_LAST_SEEN);
+  safeDel(STORE_VIEW);   // 视图状态跟着登录态作废，避免过期后重新登录停在旧日期/旧部门
 }
 
 function loadAuth() {
@@ -1156,6 +1185,7 @@ async function doLogin() {
 function doLogout() {
   state.auth = null;
   purgeAuth();
+  purgeViewState();   // 视图状态跟着登录态走：登出即清，下次登录从今天 + 我的日志开始
   state.myLog = null;
   state.deptLogs = [];
   state.depts = [];
@@ -2601,6 +2631,8 @@ async function bootstrap() {
   state.date = state.date || todayStr();
   $('dateInput').value = state.date;
   pruneStorage('', false);   // 启动只回收过期键：近 7 天的缓存必须留着给断网回退用
+  // viewDeptId 已在 init 里从视图状态恢复（见上）；loadDepts 拿到列表后 renderDeptSelect
+  // 会校验它是否仍有权访问，失效时自动回落到绑定部门/全部部门
   await loadDepts();
   await refresh();
 }
@@ -2650,6 +2682,7 @@ $('dateInput').addEventListener('change', function () {
   state.deptLogKey = '';
   state.deptSubmitted = false;
   blankForm();   // 表单也要回到新日期的初始态，不能留着旧日期的内容
+  saveViewState();   // 记住用户选的日期，下拉刷新后不再回到今天
   renderWritePane();
   refresh().then(function () {
     if (seq === state.dimensionSeq) state.dimensionLoading = false;
@@ -2661,6 +2694,7 @@ $('dateInput').addEventListener('change', function () {
 $('deptSelect').addEventListener('change', function () {
   flushDraft();   // 未绑部门时 draftKey 会 fallback 到 viewDeptId，切换前先落盘旧维度
   state.viewDeptId = $('deptSelect').value;
+  saveViewState();   // 记住用户选的查看部门，刷新后不丢
   syncDeptLabel();
   loadDeptLogs().catch(function (e) {
     if (e.message === 'AUTH_EXPIRED') return;
@@ -2927,6 +2961,7 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', sche
 
 function switchTab(tab) {
   state.tab = tab;
+  saveViewState();   // 记住当前标签页，刷新后不再回到「我的日志」
   $('tabWriteBtn').setAttribute('aria-selected', tab === 'write' ? 'true' : 'false');
   $('tabReadBtn').setAttribute('aria-selected', tab === 'read' ? 'true' : 'false');
   $('paneWrite').hidden = tab !== 'write';
@@ -2960,7 +2995,12 @@ document.addEventListener('visibilitychange', function () {
 /* ---------- 启动 ---------- */
 (function init() {
   state.auth = loadAuth();
-  state.date = todayStr();
+  // 登录态有效才恢复用户上次选的日期/标签页；未登录或闲置过期都从今天 + 我的日志开始
+  var view = state.auth ? loadViewState() : null;
+  state.date = (view && view.date) || todayStr();
+  // viewDeptId 必须在 switchTab 之前恢复：switchTab 会调 saveViewState，
+  // 若在恢复前触发，会把空值写回并覆盖掉用户上次选的非绑定部门
+  if (view && view.viewDeptId !== null) state.viewDeptId = view.viewDeptId;
   $('dateInput').value = state.date;
   renderAuthState();
 
@@ -2969,6 +3009,7 @@ document.addEventListener('visibilitychange', function () {
   }
 
   if (state.auth) {
+    if (view && view.tab) switchTab(view.tab);   // 恢复用户上次所在标签页
     bootstrap().catch(function (e) {
       if (e.message === 'AUTH_EXPIRED') return;
       if (isNetworkError(e)) setNetNotice();
